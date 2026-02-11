@@ -204,3 +204,39 @@
 - [ ] Geração de artifacts de documento exemplo funcionando (`summary/map/flashcards/questions`)
 - [x] No modo `faithful`, todos os itens com `sourceChunkIds` válidos ou marcados `notFoundInMaterial`
 - [x] Limite do plano grátis bloqueando corretamente
+
+## Rodada 7 - Hardening (Segurança + Confiabilidade)
+
+### 7.1 Ambiente e execução
+
+- [x] Adicionar `.env` ao `.gitignore` para evitar commit acidental de segredos
+- [x] Corrigir script `dev` para funcionar sem depender de `pnpm` global no subprocesso
+- [x] Corrigir `dev:metro` para porta válida no Windows (remover `${EXPO_PORT:-8081}`)
+- [x] Tornar plugin `react-native-purchases` opcional no `app.config.ts` para não quebrar `expo start` quando plugin não estiver resolvível
+
+### 7.2 Autorização por ownership (backend)
+
+- [x] Restringir `documents.list(folderId)` ao dono da pasta/documento
+- [x] Restringir `documents.get(id)` ao dono do documento
+- [x] Restringir `chunks.list(documentId)` ao dono do documento
+- [x] Restringir `artifacts.list(documentId)` ao dono do documento
+- [x] Restringir `artifacts.generate(documentId)` ao dono do documento
+- [x] Restringir `review.initForDocument(documentId)` ao dono do documento
+- [x] Validar ownership de `folderId` em `documents.upload`
+
+### 7.3 Revisão espaçada
+
+- [x] Corrigir `review.answer` para usar estado atual do `review_item` (easeFactor/interval/streak)
+- [x] Garantir update de revisão filtrando por `userId`
+
+### 7.4 Validação após mudanças
+
+- [x] `corepack pnpm check`
+- [x] `corepack pnpm lint` (sem erros, warnings conhecidos)
+- [x] `corepack pnpm test`
+
+### 7.5 Próximos passos (pendentes)
+
+- [ ] Endurecer webhook RevenueCat com validação forte de assinatura + proteção contra replay
+- [ ] Restringir CORS com allowlist explícita (evitar reflection com credentials)
+- [ ] Teste E2E real com `.env` completo (OAuth + DB + Gemini + upload + resultados + revisão)

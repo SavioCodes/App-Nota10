@@ -201,16 +201,22 @@ async function generateArtifactsForDocument(args: {
   userId: number;
   consumeUsage: boolean;
 }) {
-  const document = await db.getDocument(args.documentId);
+  const document = await db.getDocument(args.documentId, args.userId);
   if (!document) throw new Error("DOCUMENT_NOT_FOUND");
 
-  const chunkRows = await db.getDocumentChunks(args.documentId);
+  const chunkRows = await db.getDocumentChunks(args.documentId, args.userId);
   if (chunkRows.length === 0) throw new Error("Documento sem texto extraido");
 
   const chunks: ChunkData[] = chunkRows.map((chunk) => ({ id: chunk.id, text: chunk.textContent }));
   const sourceHash = document.textHash ?? computeTextHash(chunks.map((chunk) => chunk.text).join("\n\n"));
 
-  const cached = await db.getDocumentArtifacts(args.documentId, undefined, args.mode, sourceHash);
+  const cached = await db.getDocumentArtifacts(
+    args.documentId,
+    undefined,
+    args.mode,
+    sourceHash,
+    args.userId,
+  );
   if (cached.length > 0) {
     return { cached: true, count: cached.length };
   }
@@ -266,8 +272,8 @@ async function processDocument(
     }
 
     const textHash = computeTextHash(extractedText);
-    const currentDocument = await db.getDocument(docId);
-    const existingChunks = await db.getDocumentChunks(docId);
+    const currentDocument = await db.getDocument(docId, userId);
+    const existingChunks = await db.getDocumentChunks(docId, userId);
     const shouldReuseChunks =
       currentDocument?.textHash === textHash && existingChunks.length > 0;
 
@@ -332,13 +338,13 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ folderId: z.number().optional() }).optional())
       .query(({ ctx, input }) => {
-        if (input?.folderId) return db.getFolderDocuments(input.folderId);
+        if (input?.folderId) return db.getFolderDocuments(input.folderId, ctx.user.id);
         return db.getUserDocuments(ctx.user.id);
       }),
     recent: protectedProcedure.query(({ ctx }) => db.getUserDocuments(ctx.user.id, 5)),
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
-      .query(({ input }) => db.getDocument(input.id)),
+      .query(({ ctx, input }) => db.getDocument(input.id, ctx.user.id)),
     upload: protectedProcedure
       .input(
         z.object({
@@ -350,6 +356,11 @@ export const appRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
+        const folder = await db.getFolder(input.folderId, ctx.user.id);
+        if (!folder) {
+          throw new Error("FOLDER_NOT_FOUND");
+        }
+
         await assertConversionAllowed(ctx.user.id);
 
         const fileBuffer = Buffer.from(input.fileBase64, "base64");
@@ -377,7 +388,7 @@ export const appRouter = router({
   chunks: router({
     list: protectedProcedure
       .input(z.object({ documentId: z.number() }))
-      .query(({ input }) => db.getDocumentChunks(input.documentId)),
+      .query(({ ctx, input }) => db.getDocumentChunks(input.documentId, ctx.user.id)),
   }),
 
   artifacts: router({
@@ -389,13 +400,15 @@ export const appRouter = router({
           mode: z.enum(["faithful", "deepened", "exam"]).optional(),
         }),
       )
-      .query(async ({ input }) => {
-        const document = await db.getDocument(input.documentId);
+      .query(async ({ ctx, input }) => {
+        const document = await db.getDocument(input.documentId, ctx.user.id);
+        if (!document) return [];
         return db.getDocumentArtifacts(
           input.documentId,
           input.type,
           input.mode,
           document?.textHash ?? undefined,
+          ctx.user.id,
         );
       }),
     generate: protectedProcedure
@@ -415,17 +428,22 @@ export const appRouter = router({
     all: protectedProcedure.query(({ ctx }) => db.getAllUserReviewItems(ctx.user.id)),
     answer: protectedProcedure
       .input(z.object({ reviewItemId: z.number(), quality: z.number().min(0).max(5) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { reviewItemId, quality } = input;
-        let easeFactor = 2.5;
-        let interval = 1;
-        let streak = 0;
+        const reviewItem = await db.getReviewItem(reviewItemId, ctx.user.id);
+        if (!reviewItem) {
+          throw new Error("REVIEW_ITEM_NOT_FOUND");
+        }
+
+        let easeFactor = reviewItem.easeFactor;
+        let interval = reviewItem.interval;
+        let streak = reviewItem.streak;
 
         if (quality >= 3) {
           streak += 1;
           if (streak === 1) interval = 1;
           else if (streak === 2) interval = 6;
-          else interval = Math.round(interval * easeFactor);
+          else interval = Math.max(1, Math.round(interval * easeFactor));
           easeFactor = Math.max(
             1.3,
             easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)),
@@ -437,18 +455,23 @@ export const appRouter = router({
 
         const nextReviewAt = new Date();
         nextReviewAt.setDate(nextReviewAt.getDate() + interval);
-        await db.updateReviewItem(reviewItemId, { nextReviewAt, easeFactor, interval, streak });
+        await db.updateReviewItem(reviewItemId, { nextReviewAt, easeFactor, interval, streak }, ctx.user.id);
         return { nextReviewAt, interval, streak };
       }),
     initForDocument: protectedProcedure
       .input(z.object({ documentId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const document = await db.getDocument(input.documentId);
+        const document = await db.getDocument(input.documentId, ctx.user.id);
+        if (!document) {
+          throw new Error("DOCUMENT_NOT_FOUND");
+        }
+
         const flashcards = await db.getDocumentArtifacts(
           input.documentId,
           "flashcard",
           undefined,
           document?.textHash ?? undefined,
+          ctx.user.id,
         );
         const now = new Date();
         const items = flashcards.map((artifact) => ({

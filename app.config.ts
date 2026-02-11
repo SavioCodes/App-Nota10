@@ -2,6 +2,18 @@
 import "./scripts/load-env.js";
 import type { ExpoConfig } from "expo/config";
 
+function hasPurchasesConfigPlugin(): boolean {
+  try {
+    if (typeof require !== "function" || typeof require.resolve !== "function") {
+      return false;
+    }
+    require.resolve("react-native-purchases/app.plugin.js");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Bundle ID format: space.manus.<project_name_dots>.<timestamp>
 // e.g., "my-app" created at 2024-01-15 10:30:45 -> "space.manus.my.app.t20240115103045"
 // Bundle ID can only contain letters, numbers, and dots
@@ -37,6 +49,8 @@ const env = {
   iosBundleId: bundleId,
   androidPackage: bundleId,
 };
+
+const purchasesPluginEnabled = hasPurchasesConfigPlugin();
 
 const config: ExpoConfig = {
   name: env.appName,
@@ -86,7 +100,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
-    "react-native-purchases",
+    ...(purchasesPluginEnabled ? ["react-native-purchases"] : []),
     [
       "expo-audio",
       {

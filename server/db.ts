@@ -215,9 +215,16 @@ export async function deleteFolder(id: number, userId: number) {
   await db.delete(folders).where(and(eq(folders.id, id), eq(folders.userId, userId)));
 }
 
-export async function getFolderDocuments(folderId: number) {
+export async function getFolderDocuments(folderId: number, userId?: number) {
   const db = await getDb();
   if (!db) return [];
+  if (typeof userId === "number") {
+    return db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.folderId, folderId), eq(documents.userId, userId)))
+      .orderBy(desc(documents.createdAt));
+  }
   return db.select().from(documents).where(eq(documents.folderId, folderId)).orderBy(desc(documents.createdAt));
 }
 
@@ -229,10 +236,25 @@ export async function getUserDocuments(userId: number, limit?: number) {
   return q;
 }
 
-export async function getDocument(id: number) {
+export async function getDocument(id: number, userId?: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(documents).where(eq(documents.id, id)).limit(1);
+  const whereClause =
+    typeof userId === "number"
+      ? and(eq(documents.id, id), eq(documents.userId, userId))
+      : eq(documents.id, id);
+  const result = await db.select().from(documents).where(whereClause).limit(1);
+  return result[0];
+}
+
+export async function getFolder(id: number, userId?: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const whereClause =
+    typeof userId === "number"
+      ? and(eq(folders.id, id), eq(folders.userId, userId))
+      : eq(folders.id, id);
+  const result = await db.select().from(folders).where(whereClause).limit(1);
   return result[0];
 }
 
@@ -259,9 +281,24 @@ export async function updateDocumentStatus(
   await db.update(documents).set(updateData).where(eq(documents.id, id));
 }
 
-export async function getDocumentChunks(documentId: number) {
+export async function getDocumentChunks(documentId: number, userId?: number) {
   const db = await getDb();
   if (!db) return [];
+  if (typeof userId === "number") {
+    return db
+      .select({
+        id: chunks.id,
+        documentId: chunks.documentId,
+        chunkOrder: chunks.chunkOrder,
+        textContent: chunks.textContent,
+        startOffset: chunks.startOffset,
+        endOffset: chunks.endOffset,
+      })
+      .from(chunks)
+      .innerJoin(documents, eq(chunks.documentId, documents.id))
+      .where(and(eq(chunks.documentId, documentId), eq(documents.userId, userId)))
+      .orderBy(chunks.chunkOrder);
+  }
   return db.select().from(chunks).where(eq(chunks.documentId, documentId)).orderBy(chunks.chunkOrder);
 }
 
@@ -313,6 +350,7 @@ export async function getDocumentArtifacts(
   type?: string,
   mode?: string,
   sourceHash?: string,
+  userId?: number,
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -320,6 +358,24 @@ export async function getDocumentArtifacts(
   if (type) conditions.push(eq(artifacts.type, type as any));
   if (mode) conditions.push(eq(artifacts.mode, mode as any));
   if (sourceHash) conditions.push(eq(artifacts.sourceHash, sourceHash));
+
+  if (typeof userId === "number") {
+    return db
+      .select({
+        id: artifacts.id,
+        documentId: artifacts.documentId,
+        type: artifacts.type,
+        content: artifacts.content,
+        sourceChunkIds: artifacts.sourceChunkIds,
+        sourceHash: artifacts.sourceHash,
+        mode: artifacts.mode,
+        createdAt: artifacts.createdAt,
+      })
+      .from(artifacts)
+      .innerJoin(documents, eq(artifacts.documentId, documents.id))
+      .where(and(...conditions, eq(documents.userId, userId)));
+  }
+
   return db.select().from(artifacts).where(and(...conditions));
 }
 
@@ -370,10 +426,26 @@ export async function updateReviewItem(
     interval: number;
     streak: number;
   },
+  userId?: number,
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(reviewItems).set(data).where(eq(reviewItems.id, id));
+  const whereClause =
+    typeof userId === "number"
+      ? and(eq(reviewItems.id, id), eq(reviewItems.userId, userId))
+      : eq(reviewItems.id, id);
+  await db.update(reviewItems).set(data).where(whereClause);
+}
+
+export async function getReviewItem(id: number, userId?: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const whereClause =
+    typeof userId === "number"
+      ? and(eq(reviewItems.id, id), eq(reviewItems.userId, userId))
+      : eq(reviewItems.id, id);
+  const result = await db.select().from(reviewItems).where(whereClause).limit(1);
+  return result[0];
 }
 
 export async function getDailyUsage(userId: number, date: string) {
