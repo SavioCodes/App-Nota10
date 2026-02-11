@@ -26,9 +26,8 @@ Aplicativo educacional construido com Expo + React Native + backend Node/tRPC pa
 14. Qualidade e validacao
 15. Troubleshooting
 16. Seguranca
-17. Contribuicao
-18. Publicacao no GitHub
-19. Licenca
+17. Publicacao no GitHub
+18. Licenca
 
 ---
 
@@ -429,9 +428,7 @@ Padroes adicionados ao repositorio:
 
 - `.editorconfig`
 - `.gitattributes`
-- `CONTRIBUTING.md`
 - `SECURITY.md`
-- templates de issue/PR em `.github/`
 
 ---
 
@@ -472,20 +469,7 @@ Recomendacoes:
 
 ---
 
-## 17) Contribuicao
-
-Consulte `CONTRIBUTING.md`.
-
-Arquivos de apoio:
-
-- `.github/pull_request_template.md`
-- `.github/ISSUE_TEMPLATE/bug_report.md`
-- `.github/ISSUE_TEMPLATE/feature_request.md`
-- `.github/CODEOWNERS`
-
----
-
-## 18) Publicacao no GitHub
+## 17) Publicacao no GitHub
 
 Se quiser conectar este projeto ao repositorio remoto:
 
@@ -510,7 +494,7 @@ Para deixar privado depois:
 
 ---
 
-## 19) Licenca
+## 18) Licenca
 
 MIT License.
 
