@@ -1,6 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import { ENV } from "./env";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
+export type LlmProfile = "fast" | "strict";
+export type StudyMode = "faithful" | "deepened" | "exam";
+export type ThinkingLevel = "low" | "medium" | "high";
+export type MediaResolution = "low" | "medium" | "high";
 
 export type TextContent = {
   type: "text";
@@ -19,7 +25,15 @@ export type FileContent = {
   type: "file_url";
   file_url: {
     url: string;
-    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4";
+    mime_type?:
+      | "audio/mpeg"
+      | "audio/wav"
+      | "application/pdf"
+      | "audio/mp4"
+      | "video/mp4"
+      | "image/png"
+      | "image/jpeg"
+      | "application/octet-stream";
   };
 };
 
@@ -52,6 +66,19 @@ export type ToolChoiceExplicit = {
 
 export type ToolChoice = ToolChoicePrimitive | ToolChoiceByName | ToolChoiceExplicit;
 
+export type JsonSchema = {
+  name: string;
+  schema: Record<string, unknown>;
+  strict?: boolean;
+};
+
+export type OutputSchema = JsonSchema;
+
+export type ResponseFormat =
+  | { type: "text" }
+  | { type: "json_object" }
+  | { type: "json_schema"; json_schema: JsonSchema };
+
 export type InvokeParams = {
   messages: Message[];
   tools?: Tool[];
@@ -63,6 +90,12 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  profile?: LlmProfile;
+  mode?: StudyMode;
+  model?: string;
+  mediaResolution?: MediaResolution;
+  thinkingLevel?: ThinkingLevel;
+  temperature?: number;
 };
 
 export type ToolCall = {
@@ -78,15 +111,15 @@ export type InvokeResult = {
   id: string;
   created: number;
   model: string;
-  choices: Array<{
+  choices: {
     index: number;
     message: {
       role: Role;
-      content: string | Array<TextContent | ImageContent | FileContent>;
+      content: string | (TextContent | ImageContent | FileContent)[];
       tool_calls?: ToolCall[];
     };
     finish_reason: string | null;
-  }>;
+  }[];
   usage?: {
     prompt_tokens: number;
     completion_tokens: number;
@@ -94,221 +127,363 @@ export type InvokeResult = {
   };
 };
 
-export type JsonSchema = {
-  name: string;
-  schema: Record<string, unknown>;
-  strict?: boolean;
+type GeminiPart = {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
+  fileData?: {
+    mimeType?: string;
+    fileUri: string;
+  };
 };
 
-export type OutputSchema = JsonSchema;
+type GeminiContent = {
+  role: "user" | "model";
+  parts: GeminiPart[];
+};
 
-export type ResponseFormat =
-  | { type: "text" }
-  | { type: "json_object" }
-  | { type: "json_schema"; json_schema: JsonSchema };
+type NormalizedInvokeRequest = {
+  model: string;
+  apiKey: string;
+  contents: GeminiContent[];
+  systemInstruction?: {
+    parts: GeminiPart[];
+  };
+  generationConfig: Record<string, unknown>;
+};
+
+export type LlmAdapter = {
+  invoke: (params: InvokeParams) => Promise<InvokeResult>;
+};
+
+const VALID_THINKING_LEVELS = new Set<ThinkingLevel>(["low", "medium", "high"]);
+const VALID_MEDIA_RESOLUTIONS = new Set<MediaResolution>(["low", "medium", "high"]);
 
 const ensureArray = (value: MessageContent | MessageContent[]): MessageContent[] =>
   Array.isArray(value) ? value : [value];
 
-const normalizeContentPart = (part: MessageContent): TextContent | ImageContent | FileContent => {
-  if (typeof part === "string") {
-    return { type: "text", text: part };
-  }
+const toBase64 = (data: ArrayBuffer) => Buffer.from(data).toString("base64");
 
-  if (part.type === "text") {
-    return part;
-  }
+const dataUrlPattern = /^data:([^;,]+);base64,(.+)$/i;
 
-  if (part.type === "image_url") {
-    return part;
-  }
-
-  if (part.type === "file_url") {
-    return part;
-  }
-
-  throw new Error("Unsupported message content part");
-};
-
-const normalizeMessage = (message: Message) => {
-  const { role, name, tool_call_id } = message;
-
-  if (role === "tool" || role === "function") {
-    const content = ensureArray(message.content)
-      .map((part) => (typeof part === "string" ? part : JSON.stringify(part)))
-      .join("\n");
-
-    return {
-      role,
-      name,
-      tool_call_id,
-      content,
-    };
-  }
-
-  const contentParts = ensureArray(message.content).map(normalizeContentPart);
-
-  // If there's only text content, collapse to a single string for compatibility
-  if (contentParts.length === 1 && contentParts[0].type === "text") {
-    return {
-      role,
-      name,
-      content: contentParts[0].text,
-    };
-  }
-
+function parseDataUrl(url: string): { mimeType: string; data: string } | null {
+  const match = dataUrlPattern.exec(url.trim());
+  if (!match) return null;
   return {
-    role,
-    name,
-    content: contentParts,
+    mimeType: match[1] ?? "application/octet-stream",
+    data: match[2] ?? "",
   };
-};
+}
 
-const normalizeToolChoice = (
-  toolChoice: ToolChoice | undefined,
-  tools: Tool[] | undefined,
-): "none" | "auto" | ToolChoiceExplicit | undefined => {
-  if (!toolChoice) return undefined;
-
-  if (toolChoice === "none" || toolChoice === "auto") {
-    return toolChoice;
+async function urlToInlineData(
+  url: string,
+  fallbackMimeType?: string,
+): Promise<{ mimeType: string; data: string }> {
+  const parsed = parseDataUrl(url);
+  if (parsed) {
+    return parsed;
   }
 
-  if (toolChoice === "required") {
-    if (!tools || tools.length === 0) {
-      throw new Error("tool_choice 'required' was provided but no tools were configured");
+  const response = await fetch(url);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      `Failed to fetch media URL (${response.status} ${response.statusText}): ${body}`.trim(),
+    );
+  }
+
+  const mimeType =
+    response.headers.get("content-type")?.split(";")[0]?.trim() ||
+    fallbackMimeType ||
+    "application/octet-stream";
+  const data = toBase64(await response.arrayBuffer());
+  return { mimeType, data };
+}
+
+function normalizeRole(role: Role): "user" | "model" | "system" {
+  if (role === "assistant") return "model";
+  if (role === "system") return "system";
+  return "user";
+}
+
+async function toGeminiParts(content: MessageContent | MessageContent[]): Promise<GeminiPart[]> {
+  const normalized = ensureArray(content);
+  const parts: GeminiPart[] = [];
+
+  for (const part of normalized) {
+    if (typeof part === "string") {
+      if (part.trim().length > 0) parts.push({ text: part });
+      continue;
     }
 
-    if (tools.length > 1) {
-      throw new Error(
-        "tool_choice 'required' needs a single tool or specify the tool name explicitly",
-      );
+    if (part.type === "text") {
+      if (part.text.trim().length > 0) parts.push({ text: part.text });
+      continue;
     }
 
-    return {
-      type: "function",
-      function: { name: tools[0].function.name },
-    };
-  }
+    if (part.type === "image_url") {
+      const detail = part.image_url.detail;
+      const inlineData = await urlToInlineData(part.image_url.url, "image/jpeg");
+      parts.push({ inlineData });
 
-  if ("name" in toolChoice) {
-    return {
-      type: "function",
-      function: { name: toolChoice.name },
-    };
-  }
-
-  return toolChoice;
-};
-
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
-
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
-
-const normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema,
-}: {
-  responseFormat?: ResponseFormat;
-  response_format?: ResponseFormat;
-  outputSchema?: OutputSchema;
-  output_schema?: OutputSchema;
-}):
-  | { type: "json_schema"; json_schema: JsonSchema }
-  | { type: "text" }
-  | { type: "json_object" }
-  | undefined => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (explicitFormat.type === "json_schema" && !explicitFormat.json_schema?.schema) {
-      throw new Error("responseFormat json_schema requires a defined schema object");
+      // Keep the image detail as auxiliary instruction for better OCR behavior.
+      if (detail && detail !== "auto") {
+        parts.push({
+          text: `image_detail_hint=${detail}`,
+        });
+      }
+      continue;
     }
-    return explicitFormat;
+
+    if (part.type === "file_url") {
+      const parsed = parseDataUrl(part.file_url.url);
+      if (parsed) {
+        parts.push({
+          inlineData: {
+            mimeType: part.file_url.mime_type || parsed.mimeType,
+            data: parsed.data,
+          },
+        });
+        continue;
+      }
+
+      // Prefer inline data for compatibility. Falls back to file URI only if fetch fails.
+      try {
+        const inlineData = await urlToInlineData(part.file_url.url, part.file_url.mime_type);
+        parts.push({ inlineData });
+      } catch {
+        parts.push({
+          fileData: {
+            fileUri: part.file_url.url,
+            mimeType: part.file_url.mime_type,
+          },
+        });
+      }
+      continue;
+    }
+
+    throw new Error("Unsupported message content part");
   }
 
-  const schema = outputSchema || output_schema;
+  return parts;
+}
+
+function extractTextFromGeminiResponse(payload: any): string {
+  const candidate = payload?.candidates?.[0];
+  const parts = candidate?.content?.parts ?? [];
+  const text = parts
+    .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+    .join("")
+    .trim();
+
+  if (text) return text;
+
+  if (candidate?.finishReason && candidate.finishReason !== "STOP") {
+    throw new Error(`Gemini response has no text output (finishReason=${candidate.finishReason})`);
+  }
+
+  return "";
+}
+
+function normalizeResponseFormat(
+  params: Pick<InvokeParams, "responseFormat" | "response_format" | "outputSchema" | "output_schema">,
+): ResponseFormat | undefined {
+  const explicitFormat = params.responseFormat || params.response_format;
+  if (explicitFormat) return explicitFormat;
+
+  const schema = params.outputSchema || params.output_schema;
   if (!schema) return undefined;
-
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
 
   return {
     type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
-    },
+    json_schema: schema,
   };
-};
+}
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+function resolveThinkingLevel(params: InvokeParams): ThinkingLevel {
+  if (params.thinkingLevel && VALID_THINKING_LEVELS.has(params.thinkingLevel)) {
+    return params.thinkingLevel;
+  }
 
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-  } = params;
+  if (params.profile === "strict") {
+    const strictLevel = ENV.geminiThinkingLevelStrict.toLowerCase() as ThinkingLevel;
+    if (VALID_THINKING_LEVELS.has(strictLevel)) return strictLevel;
+    return "high";
+  }
+
+  if (params.mode === "exam") return "high";
+
+  const fastLevel = ENV.geminiThinkingLevelFast.toLowerCase() as ThinkingLevel;
+  if (VALID_THINKING_LEVELS.has(fastLevel)) return fastLevel;
+  return "medium";
+}
+
+function resolveModel(params: InvokeParams): string {
+  if (params.model && params.model.trim().length > 0) return params.model;
+  if (params.profile === "strict") return ENV.geminiStrictModel;
+  return ENV.geminiFastModel;
+}
+
+function resolveMediaResolution(params: InvokeParams): MediaResolution | undefined {
+  if (!params.mediaResolution) return undefined;
+  if (VALID_MEDIA_RESOLUTIONS.has(params.mediaResolution)) return params.mediaResolution;
+  return undefined;
+}
+
+function assertGeminiApiKey() {
+  if (!ENV.geminiApiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+}
+
+async function buildGeminiRequest(params: InvokeParams): Promise<NormalizedInvokeRequest> {
+  assertGeminiApiKey();
+
+  const systemMessages = params.messages.filter((msg) => normalizeRole(msg.role) === "system");
+  const nonSystemMessages = params.messages.filter((msg) => normalizeRole(msg.role) !== "system");
+
+  if (nonSystemMessages.length === 0) {
+    throw new Error("invokeLLM requires at least one non-system message");
+  }
+
+  const contents: GeminiContent[] = [];
+  for (const message of nonSystemMessages) {
+    const role = normalizeRole(message.role);
+    const parts = await toGeminiParts(message.content);
+    if (parts.length === 0) continue;
+    contents.push({
+      role: role === "model" ? "model" : "user",
+      parts,
+    });
+  }
+
+  if (contents.length === 0) {
+    throw new Error("invokeLLM could not build Gemini contents from provided messages");
+  }
+
+  const systemInstructionText = systemMessages
+    .map((msg) => ensureArray(msg.content))
+    .flat()
+    .map((part) => {
+      if (typeof part === "string") return part;
+      if (part.type === "text") return part.text;
+      return "";
+    })
+    .join("\n\n")
+    .trim();
+
+  const responseFormat = normalizeResponseFormat(params);
+  const generationConfig: Record<string, unknown> = {};
+  generationConfig.maxOutputTokens = params.maxTokens ?? params.max_tokens ?? 32768;
+  generationConfig.thinkingConfig = {
+    thinkingLevel: resolveThinkingLevel(params),
+  };
+
+  if (typeof params.temperature === "number") {
+    generationConfig.temperature = params.temperature;
+  }
+
+  const mediaResolution = resolveMediaResolution(params);
+  if (mediaResolution) {
+    generationConfig.mediaResolution = mediaResolution;
+  }
+
+  if (responseFormat?.type === "json_object") {
+    generationConfig.responseMimeType = "application/json";
+  }
+
+  if (responseFormat?.type === "json_schema") {
+    generationConfig.responseMimeType = "application/json";
+    generationConfig.responseSchema = responseFormat.json_schema.schema;
+  }
+
+  return {
+    model: resolveModel(params),
+    apiKey: ENV.geminiApiKey,
+    contents,
+    systemInstruction: systemInstructionText
+      ? {
+          parts: [{ text: systemInstructionText }],
+        }
+      : undefined,
+    generationConfig,
+  };
+}
+
+async function invokeGeminiRest(params: InvokeParams): Promise<InvokeResult> {
+  const request = await buildGeminiRequest(params);
+  const endpoint = new URL(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`,
+  );
+  endpoint.searchParams.set("key", request.apiKey);
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage),
+    contents: request.contents,
+    generationConfig: request.generationConfig,
   };
-
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
+  if (request.systemInstruction) {
+    payload.systemInstruction = request.systemInstruction;
   }
 
-  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
-
-  payload.max_tokens = 32768;
-  payload.thinking = {
-    budget_tokens: 128,
-  };
-
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetch(resolveApiUrl(), {
+  const response = await fetch(endpoint.toString(), {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
     },
     body: JSON.stringify(payload),
   });
 
+  const rawText = await response.text();
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`);
+    throw new Error(`Gemini invoke failed: ${response.status} ${response.statusText} - ${rawText}`);
   }
 
-  return (await response.json()) as InvokeResult;
+  const body = rawText ? JSON.parse(rawText) : {};
+  const content = extractTextFromGeminiResponse(body);
+  const usage = body?.usageMetadata;
+
+  return {
+    id: body?.responseId ?? randomUUID(),
+    created: Math.floor(Date.now() / 1000),
+    model: request.model,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content,
+        },
+        finish_reason: body?.candidates?.[0]?.finishReason ?? null,
+      },
+    ],
+    usage: usage
+      ? {
+          prompt_tokens: usage.promptTokenCount ?? 0,
+          completion_tokens: usage.candidatesTokenCount ?? 0,
+          total_tokens: usage.totalTokenCount ?? 0,
+        }
+      : undefined,
+  };
+}
+
+class GeminiRestAdapter implements LlmAdapter {
+  async invoke(params: InvokeParams): Promise<InvokeResult> {
+    return invokeGeminiRest(params);
+  }
+}
+
+let activeAdapter: LlmAdapter = new GeminiRestAdapter();
+
+export function setLlmAdapter(adapter: LlmAdapter) {
+  activeAdapter = adapter;
+}
+
+export function resetLlmAdapter() {
+  activeAdapter = new GeminiRestAdapter();
+}
+
+export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  return activeAdapter.invoke(params);
 }

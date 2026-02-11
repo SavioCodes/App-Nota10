@@ -248,12 +248,14 @@ export async function updateDocumentStatus(
   status: string,
   extractedText?: string,
   ocrConfidence?: string,
+  textHash?: string,
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const updateData: Record<string, unknown> = { status };
   if (extractedText !== undefined) updateData.extractedText = extractedText;
   if (ocrConfidence !== undefined) updateData.ocrConfidence = ocrConfidence;
+  if (textHash !== undefined) updateData.textHash = textHash;
   await db.update(documents).set(updateData).where(eq(documents.id, id));
 }
 
@@ -263,34 +265,72 @@ export async function getDocumentChunks(documentId: number) {
   return db.select().from(chunks).where(eq(chunks.documentId, documentId)).orderBy(chunks.chunkOrder);
 }
 
-export async function createChunks(documentId: number, textChunks: string[]) {
+export async function deleteDocumentChunks(documentId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  if (textChunks.length === 0) return;
-  const values = textChunks.map((text, i) => ({
-    documentId,
-    chunkOrder: i,
-    textContent: text,
-  }));
+  await db.delete(chunks).where(eq(chunks.documentId, documentId));
+}
+
+export async function createChunks(
+  documentId: number,
+  inputChunks: string[] | { chunkOrder: number; textContent: string; startOffset: number; endOffset: number }[],
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (inputChunks.length === 0) return;
+
+  const isStringChunks = typeof inputChunks[0] === "string";
+  const values = isStringChunks
+    ? (inputChunks as string[]).map((text, i) => ({
+        documentId,
+        chunkOrder: i,
+        textContent: text,
+        startOffset: 0,
+        endOffset: text.length,
+      }))
+    : (
+        inputChunks as {
+          chunkOrder: number;
+          textContent: string;
+          startOffset: number;
+          endOffset: number;
+        }[]
+      ).map(
+        (chunk) => ({
+          documentId,
+          chunkOrder: chunk.chunkOrder,
+          textContent: chunk.textContent,
+          startOffset: chunk.startOffset,
+          endOffset: chunk.endOffset,
+        }),
+      );
+
   await db.insert(chunks).values(values);
 }
 
-export async function getDocumentArtifacts(documentId: number, type?: string, mode?: string) {
+export async function getDocumentArtifacts(
+  documentId: number,
+  type?: string,
+  mode?: string,
+  sourceHash?: string,
+) {
   const db = await getDb();
   if (!db) return [];
   const conditions = [eq(artifacts.documentId, documentId)];
   if (type) conditions.push(eq(artifacts.type, type as any));
   if (mode) conditions.push(eq(artifacts.mode, mode as any));
+  if (sourceHash) conditions.push(eq(artifacts.sourceHash, sourceHash));
   return db.select().from(artifacts).where(and(...conditions));
 }
 
-export async function createArtifacts(data: Array<{
+export async function createArtifacts(data: {
   documentId: number;
   type: "summary" | "content_map" | "flashcard" | "question";
   content: any;
   sourceChunkIds: number[];
   mode: "faithful" | "deepened" | "exam";
-}>) {
+  sourceHash?: string | null;
+}[]) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (data.length === 0) return;
@@ -310,12 +350,12 @@ export async function getAllUserReviewItems(userId: number) {
   return db.select().from(reviewItems).where(eq(reviewItems.userId, userId));
 }
 
-export async function createReviewItems(data: Array<{
+export async function createReviewItems(data: {
   userId: number;
   artifactId: number;
   documentId: number;
   nextReviewAt: Date;
-}>) {
+}[]) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   if (data.length === 0) return;

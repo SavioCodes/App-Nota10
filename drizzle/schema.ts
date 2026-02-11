@@ -64,6 +64,7 @@ export const documents = mysqlTable("documents", {
   title: varchar("title", { length: 255 }).notNull(),
   originalFileUrl: varchar("originalFileUrl", { length: 1024 }).notNull(),
   extractedText: text("extractedText"),
+  textHash: varchar("textHash", { length: 64 }),
   ocrConfidence: mysqlEnum("ocrConfidence", ["high", "medium", "low"]),
   status: mysqlEnum("status", ["uploading", "extracting", "generating", "ready", "error"]).default("uploading").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -77,7 +78,11 @@ export const chunks = mysqlTable("chunks", {
   documentId: int("documentId").notNull(),
   chunkOrder: int("chunkOrder").notNull(),
   textContent: text("textContent").notNull(),
-});
+  startOffset: int("startOffset").notNull(),
+  endOffset: int("endOffset").notNull(),
+}, (table) => ({
+  documentOrderUnique: uniqueIndex("chunks_document_order_unique").on(table.documentId, table.chunkOrder),
+}));
 
 export type Chunk = typeof chunks.$inferSelect;
 
@@ -87,6 +92,7 @@ export const artifacts = mysqlTable("artifacts", {
   type: mysqlEnum("type", ["summary", "content_map", "flashcard", "question"]).notNull(),
   content: json("content").notNull(),
   sourceChunkIds: json("sourceChunkIds").notNull(),
+  sourceHash: varchar("sourceHash", { length: 64 }),
   mode: mysqlEnum("mode", ["faithful", "deepened", "exam"]).default("faithful").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

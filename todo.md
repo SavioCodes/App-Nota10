@@ -98,3 +98,109 @@
 - [x] Atualizar Home para verificar limite real de conversões
 - [x] Remover qualquer lógica mockada de plano
 - [x] Documentar setup RevenueCat (API keys, produtos, webhook URL)
+
+## Rodada 6 - Gemini 3 (Flash + Pro) e Modo Fiel Confiável
+
+### 6.0 Diagnóstico inicial (estado atual)
+
+- [x] Mapear pipeline atual (upload -> OCR -> chunks -> artifacts) em `server/routers.ts`
+- [x] Confirmar estado do LLM atual em `server/_core/llm.ts` (modelo fixo e sem adapter)
+- [x] Confirmar schema atual sem hash/offset em `drizzle/schema.ts`
+- [x] Confirmar que `results/[id]` já usa `sourceChunkIds` para "Ver fonte"
+- [x] Resolver baseline de testes/lint no ambiente local (Vitest falha por PostCSS externo e lint depende de `pnpm` no PATH do `expo lint`)
+
+### 6.1 Infra Gemini + configuração
+
+- [x] Adicionar novas env vars backend em `server/_core/env.ts`:
+- [x] `GEMINI_API_KEY`
+- [x] `GEMINI_FAST_MODEL` (default `gemini-3-flash-preview`)
+- [x] `GEMINI_STRICT_MODEL` (default `gemini-3-pro-preview`)
+- [x] `GEMINI_THINKING_LEVEL_FAST` (default `medium`; `high` no modo prova)
+- [x] `GEMINI_THINKING_LEVEL_STRICT` (default `high`)
+- [x] `MAX_UPLOAD_MB`
+- [x] `MAX_PDF_PAGES_OCR`
+- [x] Refatorar `server/_core/llm.ts` para adapter trocável com seleção explícita de perfil:
+- [x] `fast` -> Flash
+- [x] `strict` -> Pro
+- [x] Preservar compatibilidade com chamadas existentes durante migração
+
+### 6.2 Extração (imagem/PDF) com controle de custo
+
+- [x] Implementar extração para imagem via Gemini Flash (OCR) retornando texto + confiança (`high|medium|low`)
+- [x] PDF: tentar texto nativo primeiro
+- [x] PDF: fallback OCR por página quando texto nativo insuficiente
+- [x] Limitar OCR por `MAX_PDF_PAGES_OCR`
+- [x] Respeitar `MAX_UPLOAD_MB` no upload e retornar erro claro
+- [x] Definir resolução de mídia padrão para PDF (`medium`) com opção `high` se baixa qualidade
+- [x] Persistir texto extraído no documento com metadados de confiança
+
+### 6.3 Chunking determinístico e idempotência
+
+- [x] Criar módulo de chunking determinístico (ex.: `server/_core/chunker.ts`)
+- [x] Tamanho alvo entre ~600-900 chars com overlap pequeno
+- [x] Persistir em `chunks`: `chunkOrder`, `textContent`, `startOffset`, `endOffset`
+- [x] Adicionar hash do texto extraído no `documents` (ex.: `textHash`)
+- [x] Garantir idempotência: se hash igual e chunks já existem, não recriar
+- [x] Criar/atualizar migração Drizzle para novos campos/índices
+
+### 6.4 Geração de artifacts (Flash) com contrato forte
+
+- [x] Reestruturar `artifacts.generate` para produzir JSON estruturado:
+- [x] `summary`: bullets curtos
+- [x] `map`: tópicos/subtópicos
+- [x] `flashcards`: `{ front, back, difficultyTag, sourceChunkIds[] }`
+- [x] `questions`: `{ type, prompt, options?, answerKey, rationaleShort, sourceChunkIds[] }`
+- [x] Em `faithful` e `exam`, exigir `sourceChunkIds` em todos os itens
+- [x] Em `deepened`, separar claramente "FIEL" vs "COMPLEMENTO"
+- [x] Persistir apenas formato final padronizado no DB para manter UI estável
+
+### 6.5 Validador (Pro) como quality gate
+
+- [x] Criar passo de validação com Gemini Pro após geração Flash
+- [x] Verificar que `sourceChunkIds` existem no documento
+- [x] Verificar aderência factual ao conteúdo dos chunks citados
+- [x] Política de correção:
+- [x] tentar corrigir item automaticamente
+- [x] se não for possível, marcar `notFoundInMaterial: true`
+- [x] Salvar somente artifacts validados/corrigidos
+
+### 6.6 Cache + uso (usage_counters)
+
+- [x] Cache por `documentId + mode + hash` para evitar regenerar conteúdo igual
+- [x] Não regenerar artifacts na navegação quando hash for o mesmo
+- [x] Debitar `usage_counters` na geração efetiva de artifacts
+- [ ] Opcional: debitar adicional para OCR pesado
+- [x] Garantir bloqueio Free (3/dia) consistente em upload e `artifacts.generate`
+- [x] Manter planos pagos sem limite
+
+### 6.7 UI mínima (sem redesign)
+
+- [x] Garantir compatibilidade de `app/results/[id].tsx` com novos campos de artifacts
+- [x] Se não houver highlight por offset, manter fallback exibindo texto do chunk no modal "Ver fonte"
+- [x] Garantir que `Home` e `Profile` continuem refletindo plano/limite reais do backend
+
+### 6.8 Testes (Vitest)
+
+- [x] Teste unitário: chunker determinístico
+- [x] Teste unitário: validador rejeita item sem fonte ou marca "não encontrado"
+- [x] Teste unitário: cache evita 2ª geração para mesmo hash
+- [x] Teste integração leve: `artifacts.generate` com mock do adapter LLM
+- [x] Ajustar ambiente de teste para não depender de PostCSS externo ao projeto
+
+### 6.9 Documentação
+
+- [x] Atualizar README com:
+- [x] setup de `GEMINI_API_KEY`
+- [x] estratégia Flash + Pro (custo/velocidade vs validação/precisão)
+- [x] limites recomendados (`MAX_UPLOAD_MB`, `MAX_PDF_PAGES_OCR`)
+- [x] fluxo de PDFs com texto nativo vs PDFs escaneados
+- [x] Incluir troubleshooting específico de custo/limites e falhas de validação
+
+### 6.10 Critério de aceite
+
+- [x] `corepack pnpm check` passando
+- [x] `corepack pnpm lint` passando de forma real (sem falso positivo por falta de `pnpm` no PATH interno)
+- [x] `corepack pnpm test` passando
+- [ ] Geração de artifacts de documento exemplo funcionando (`summary/map/flashcards/questions`)
+- [x] No modo `faithful`, todos os itens com `sourceChunkIds` válidos ou marcados `notFoundInMaterial`
+- [x] Limite do plano grátis bloqueando corretamente

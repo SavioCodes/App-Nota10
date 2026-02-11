@@ -22,6 +22,13 @@
       "when": 1770847200000,
       "tag": "0002_revenuecat_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1770936000000,
+      "tag": "0003_gemini_pipeline",
+      "breakpoints": true
     }
   ]
 }

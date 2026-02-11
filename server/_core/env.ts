@@ -8,4 +8,11 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   revenueCatWebhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET ?? "",
+  geminiApiKey: process.env.GEMINI_API_KEY ?? process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  geminiFastModel: process.env.GEMINI_FAST_MODEL ?? "gemini-3-flash-preview",
+  geminiStrictModel: process.env.GEMINI_STRICT_MODEL ?? "gemini-3-pro-preview",
+  geminiThinkingLevelFast: process.env.GEMINI_THINKING_LEVEL_FAST ?? "medium",
+  geminiThinkingLevelStrict: process.env.GEMINI_THINKING_LEVEL_STRICT ?? "high",
+  maxUploadMb: Number(process.env.MAX_UPLOAD_MB ?? "15"),
+  maxPdfPagesOcr: Number(process.env.MAX_PDF_PAGES_OCR ?? "30"),
 };

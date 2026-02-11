@@ -102,13 +102,13 @@ Monorepo com frontend e backend no mesmo workspace.
 - DB: MySQL via Drizzle
 - Auth: OAuth + cookie/JWT
 - Storage: proxy de upload
-- LLM: OCR e geracao de conteudo
+- LLM: Gemini 3 Flash (OCR + geracao) + Gemini 3 Pro (validacao/quality gate)
 
 Fluxo resumido:
 
 1. Login
 2. Upload de imagem/PDF
-3. Processamento assinc (OCR + chunks + geracao)
+3. Processamento assinc (OCR + chunks + geracao + validacao)
 4. Consulta dos artefatos na tela de resultados
 5. Revisao/exportacao
 
@@ -134,6 +134,9 @@ Fluxo resumido:
 - `mysql2`
 - `jose`
 - `zod`
+- `@google/genai` (Gemini API)
+- `pdf-parse` (texto nativo de PDF)
+- `pdf-lib` (limite de paginas para OCR)
 
 ### Pagamentos
 
@@ -182,6 +185,9 @@ server/
     oauth.ts
     revenuecat.ts
     llm.ts
+    extraction.ts
+    chunker.ts
+    artifacts.ts
     env.ts
     cookies.ts
 
@@ -271,6 +277,13 @@ corepack pnpm db:push
 - `BUILT_IN_FORGE_API_URL`
 - `BUILT_IN_FORGE_API_KEY`
 - `REVENUECAT_WEBHOOK_SECRET`
+- `GEMINI_API_KEY`
+- `GEMINI_FAST_MODEL` (padrao: `gemini-3-flash-preview`)
+- `GEMINI_STRICT_MODEL` (padrao: `gemini-3-pro-preview`)
+- `GEMINI_THINKING_LEVEL_FAST` (padrao: `medium`, em modo prova pode subir para `high`)
+- `GEMINI_THINKING_LEVEL_STRICT` (padrao: `high`)
+- `MAX_UPLOAD_MB` (padrao: `15`)
+- `MAX_PDF_PAGES_OCR` (padrao: `30`)
 
 ### Frontend (Expo public)
 
@@ -300,9 +313,30 @@ Obs: `scripts/load-env.js` mapeia parte das variaveis backend para Expo public.
 1. Upload na UI
 2. `documents.upload`
 3. Storage + documento status `extracting`
-4. OCR + chunks
-5. Geracao de artefatos
-6. Status final `ready`
+4. Extracao:
+   - Imagem: OCR com Gemini Flash
+   - PDF: tenta texto nativo, fallback OCR Gemini (limitado por `MAX_PDF_PAGES_OCR`)
+5. Chunking deterministico com offsets + hash do texto
+6. Geracao de artefatos com Gemini Flash
+7. Validacao/correcao com Gemini Pro (quality gate)
+8. Cache por hash para evitar regeneracao
+9. Status final `ready`
+
+### Modo Fiel (Flash + Pro)
+
+- Flash gera conteudo estruturado com `sourceChunkIds`
+- Pro valida se cada item esta sustentado pelos chunks citados
+- Se nao houver suporte no material: item marcado com `notFoundInMaterial`
+- Justificativa de arquitetura:
+  - Flash = menor custo e menor latencia
+  - Pro = maior precisao para checagem factual
+
+### Cache e custo
+
+- Hash SHA-256 do texto extraido salvo em `documents.textHash`
+- Artefatos salvos com `artifacts.sourceHash`
+- `artifacts.generate` reutiliza cache quando `documentId + mode + sourceHash` ja existe
+- Conversao do plano free e debitada na geracao efetiva (nao na navegacao)
 
 ### Resultado
 
@@ -361,12 +395,16 @@ Notas:
 
 - `usage_counters` possui unique `(userId, date)`
 - `subscriptions` usa `revenueCatId` unico
+- `documents.textHash` guarda hash do texto extraido para idempotencia/cache
+- `chunks` inclui `startOffset` e `endOffset` para referencia de fonte
+- `artifacts.sourceHash` vincula artefatos ao hash atual do documento
 
 Migracoes:
 
 - `0000_*` base
 - `0001_*` dominio app
 - `0002_revenuecat_subscriptions.sql`
+- `0003_gemini_pipeline.sql`
 
 ---
 
@@ -430,6 +468,12 @@ Padroes adicionados ao repositorio:
 - `.gitattributes`
 - `SECURITY.md`
 
+Cobertura de testes atual adicionada para pipeline IA:
+
+- chunker deterministico
+- validacao de fontes no modo fiel
+- cache de `artifacts.generate` para mesmo hash
+
 ---
 
 ## 15) Troubleshooting
@@ -453,6 +497,22 @@ Esse erro aparece em cascata quando o TS config base nao eh carregado.
 - Verificar secret
 - Verificar `app_user_id` = `openId`
 - Verificar IDs de produto
+
+### `GEMINI_API_KEY is not configured`
+
+- Defina `GEMINI_API_KEY` no backend
+- Reinicie `pnpm dev:server`
+
+### `FILE_TOO_LARGE_MAX_*_MB`
+
+- Reduza o arquivo ou aumente `MAX_UPLOAD_MB`
+- Para PDF escaneado grande, prefira dividir por capitulos
+
+### OCR de PDF ficou incompleto
+
+- Aumente `MAX_PDF_PAGES_OCR`
+- Use documento com melhor resolucao
+- Verifique se o PDF tem camada de texto nativa (quando tem, o custo cai e a precisao sobe)
 
 ---
 
