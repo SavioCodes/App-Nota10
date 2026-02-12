@@ -1,11 +1,14 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 
 import { COOKIE_NAME } from "../shared/const.js";
 import { toDbArtifacts, parseArtifactBundle, validateArtifactBundleSources } from "./_core/artifacts";
 import { chunkTextDeterministic, computeTextHash, normalizeExtractedText } from "./_core/chunker";
 import { getSessionCookieOptions } from "./_core/cookies";
-import { assertUploadSize, extractDocumentText } from "./_core/extraction";
+import { ENV } from "./_core/env";
+import { assertUploadMimeType, assertUploadSize, extractDocumentText } from "./_core/extraction";
 import { invokeLLM, type StudyMode } from "./_core/llm";
+import { consumeRateLimit } from "./_core/rate-limit";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import * as db from "./db";
@@ -16,6 +19,36 @@ type ChunkData = { id: number; text: string };
 
 function getTodayIsoDate() {
   return new Date().toISOString().split("T")[0];
+}
+
+function sanitizeLimit(value: number, fallback: number) {
+  if (!Number.isFinite(value)) return fallback;
+  const normalized = Math.floor(value);
+  if (normalized <= 0) return fallback;
+  return normalized;
+}
+
+function assertUserRateLimit(params: {
+  scope: "upload" | "artifacts_generate";
+  userId: number;
+  configuredLimit: number;
+  configuredWindowMs: number;
+}) {
+  const limit = sanitizeLimit(params.configuredLimit, 1);
+  const windowMs = sanitizeLimit(params.configuredWindowMs, 60_000);
+  const result = consumeRateLimit({
+    key: `${params.scope}:${params.userId}`,
+    limit,
+    windowMs,
+  });
+
+  if (result.allowed) return;
+
+  const retryAfterSeconds = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
+  throw new TRPCError({
+    code: "TOO_MANY_REQUESTS",
+    message: `RATE_LIMITED_RETRY_AFTER_${retryAfterSeconds}_SECONDS`,
+  });
 }
 
 async function assertConversionAllowed(userId: number) {
@@ -361,9 +394,17 @@ export const appRouter = router({
           throw new Error("FOLDER_NOT_FOUND");
         }
 
+        assertUserRateLimit({
+          scope: "upload",
+          userId: ctx.user.id,
+          configuredLimit: ENV.rateLimitUploadMax,
+          configuredWindowMs: ENV.rateLimitUploadWindowMs,
+        });
+
         await assertConversionAllowed(ctx.user.id);
 
         const fileBuffer = Buffer.from(input.fileBase64, "base64");
+        assertUploadMimeType(input.mimeType);
         assertUploadSize(fileBuffer);
 
         const fileKey = `docs/${ctx.user.id}/${Date.now()}-${input.fileName}`;
@@ -413,14 +454,21 @@ export const appRouter = router({
       }),
     generate: protectedProcedure
       .input(z.object({ documentId: z.number(), mode: z.enum(["faithful", "deepened", "exam"]) }))
-      .mutation(({ ctx, input }) =>
-        generateArtifactsForDocument({
+      .mutation(({ ctx, input }) => {
+        assertUserRateLimit({
+          scope: "artifacts_generate",
+          userId: ctx.user.id,
+          configuredLimit: ENV.rateLimitArtifactsMax,
+          configuredWindowMs: ENV.rateLimitArtifactsWindowMs,
+        });
+
+        return generateArtifactsForDocument({
           documentId: input.documentId,
           mode: input.mode as StudyMode,
           userId: ctx.user.id,
           consumeUsage: true,
-        }),
-      ),
+        });
+      }),
   }),
 
   review: router({

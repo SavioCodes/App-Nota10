@@ -18,6 +18,8 @@ export type ExtractionResult = {
 const MIN_NATIVE_TEXT_TOTAL = 300;
 const MIN_NATIVE_TEXT_PER_PAGE = 40;
 
+const ALLOWED_EXACT_MIME_TYPES = new Set(["application/pdf"]);
+
 function normalizeConfidence(value: unknown): OcrConfidence | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -39,6 +41,13 @@ export function assertUploadSize(fileBuffer: Buffer) {
   if (fileBuffer.byteLength > maxBytes) {
     throw new Error(`FILE_TOO_LARGE_MAX_${maxUploadMb}_MB`);
   }
+}
+
+export function assertUploadMimeType(mimeType: string) {
+  const normalized = mimeType.trim().toLowerCase();
+  if (normalized.startsWith("image/")) return;
+  if (ALLOWED_EXACT_MIME_TYPES.has(normalized)) return;
+  throw new Error(`UNSUPPORTED_MIME_TYPE_${normalized || "empty"}`);
 }
 
 async function extractPdfTextNative(fileBuffer: Buffer): Promise<{ text: string; totalPages: number }> {

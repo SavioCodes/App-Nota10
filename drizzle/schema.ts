@@ -1,4 +1,4 @@
-﻿import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar, float, json, uniqueIndex } from "drizzle-orm/mysql-core";
+import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar, float, json, uniqueIndex, bigint } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -35,6 +35,21 @@ export const subscriptions = mysqlTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+export const revenueCatWebhookEvents = mysqlTable("revenuecat_webhook_events", {
+  id: int("id").autoincrement().primaryKey(),
+  eventId: varchar("eventId", { length: 191 }).notNull(),
+  appUserId: varchar("appUserId", { length: 191 }),
+  eventType: varchar("eventType", { length: 64 }),
+  eventTimestampMs: bigint("eventTimestampMs", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  eventIdUnique: uniqueIndex("revenuecat_webhook_events_event_id_unique").on(table.eventId),
+  appUserIdx: index("revenuecat_webhook_events_app_user_idx").on(table.appUserId),
+}));
+
+export type RevenueCatWebhookEvent = typeof revenueCatWebhookEvents.$inferSelect;
+export type InsertRevenueCatWebhookEvent = typeof revenueCatWebhookEvents.$inferInsert;
 
 export const usageCounters = mysqlTable("usage_counters", {
   id: int("id").autoincrement().primaryKey(),
@@ -112,3 +127,4 @@ export const reviewItems = mysqlTable("review_items", {
 });
 
 export type ReviewItem = typeof reviewItems.$inferSelect;
+

@@ -238,5 +238,90 @@
 ### 7.5 Próximos passos (pendentes)
 
 - [ ] Endurecer webhook RevenueCat com validação forte de assinatura + proteção contra replay
-- [ ] Restringir CORS com allowlist explícita (evitar reflection com credentials)
+- [x] Restringir CORS com allowlist explícita (evitar reflection com credentials)
 - [ ] Teste E2E real com `.env` completo (OAuth + DB + Gemini + upload + resultados + revisão)
+
+### 7.6 Baseline atual (mapeamento do app)
+
+- [x] Frontend (Expo Router) mapeado:
+- [x] abas em `app/(tabs)` e fluxos principais em `app/scanner.tsx`, `app/upload-pdf.tsx`, `app/results/*`, `app/review-session.tsx`, `app/paywall.tsx`
+- [x] providers e estado global mapeados em `lib/theme-provider.tsx` e `lib/purchases-provider.tsx`
+- [x] Backend (Express + tRPC) mapeado:
+- [x] entrada HTTP em `server/index.ts` e composição de rotas em `server/routers.ts`
+- [x] domínios principais: `auth`, `folders`, `documents`, `chunks`, `artifacts`, `review`, `usage`, `subscription`
+- [x] Banco (Drizzle/MySQL) mapeado:
+- [x] tabelas centrais em `drizzle/schema.ts` (`documents`, `chunks`, `artifacts`, `review_items`, `usage_counters`, `subscriptions`)
+- [x] Pipeline mapeado:
+- [x] ingestão -> extração -> chunking -> geração de artifacts -> validação -> revisão
+- [x] Dependências externas mapeadas:
+- [x] Gemini (Flash/Pro), RevenueCat, storage S3/proxy upload, OAuth provider externo
+
+## Rodada 8 - Plano de Execução (Próximos Passos)
+
+### 8.0 Objetivo da rodada
+
+- [ ] Fechar lacunas críticas de segurança e confiabilidade
+- [ ] Validar o fluxo real ponta-a-ponta com ambiente completo
+- [ ] Preparar base para evolução sem regressão
+
+### 8.1 P0 - Segurança e backend crítico
+
+- [x] RevenueCat webhook:
+- [ ] validar assinatura real do provedor (não apenas bearer)
+- [x] validar timestamp/nonce para anti-replay
+- [x] registrar evento processado para idempotência
+- [x] CORS:
+- [x] trocar reflexão de `Origin` por allowlist explícita via env (ex.: `CORS_ALLOWED_ORIGINS`)
+- [x] manter `credentials: true` somente para origens permitidas
+- [x] Upload hardening:
+- [x] whitelist de MIME types permitidos (`image/*`, `application/pdf`)
+- [x] manter limite de tamanho e retornar erro tipado
+- [x] Rate limiting mínimo:
+- [x] proteger rotas sensíveis (`upload`, `artifacts.generate`, webhook)
+- [x] adicionar testes unitários para guardas de rate-limit e MIME
+- [ ] observação: RevenueCat não envia assinatura HMAC nativa no payload; segurança forte fica em segredo bearer + idempotência + janela temporal
+
+### 8.2 P1 - Validação funcional real (E2E)
+
+- [ ] Preparar `.env` completo para ambiente de validação (DB/OAuth/Gemini/RevenueCat)
+- [ ] Rodar migração real (`corepack pnpm db:push`) e validar schema aplicado
+- [ ] Fluxo E2E completo:
+- [ ] login
+- [ ] criação de pasta
+- [ ] upload imagem/PDF
+- [ ] extração -> chunks -> artifacts (`summary/map/flashcards/questions`)
+- [ ] abrir "Ver fonte" com chunk correto
+- [ ] iniciar sessão de revisão e responder cards
+- [ ] Validar critério pendente da Rodada 6:
+- [ ] geração de artifacts de documento exemplo funcionando na prática
+
+### 8.3 P2 - Qualidade de produto e DX
+
+- [ ] Revisão:
+- [ ] exibir conteúdo real do flashcard na sessão (não apenas `artifactId`)
+- [ ] OCR/custo:
+- [ ] decidir e implementar débito opcional para OCR pesado
+- [ ] Testes:
+- [ ] remover `skip` de `auth.logout` e cobrir fluxo completo
+- [ ] adicionar testes de autorização por ownership
+- [ ] Documentação:
+- [ ] atualizar `docs/audit.md` após fechamento de P0/P1
+- [ ] manter `README.md` sincronizado com comportamento real de dev/prod
+
+### 8.4 Critério de saída da Rodada 8
+
+- [x] `corepack pnpm check` passando
+- [x] `corepack pnpm lint` sem erros
+- [x] `corepack pnpm test` passando
+- [ ] E2E validado com evidência (comandos + resultado)
+- [ ] riscos P0 mitigados e documentados
+
+### 8.5 Ordem de execução recomendada
+
+- [x] 1) Fechar P0 de segurança no backend (webhook/CORS/upload/rate-limit)
+- [x] 2) Rodar validação estática (`check` + `lint`) após cada bloco de mudança
+- [ ] 3) Preparar `.env` completo e validar conexão real com serviços externos
+- [ ] 4) Rodar `db:push` e conferir schema/migrações aplicadas
+- [ ] 5) Executar E2E funcional completo (login -> upload -> resultados -> revisão)
+- [ ] 6) Ajustar UX mínima pendente (conteúdo real em review-session)
+- [ ] 7) Fechar testes faltantes e atualizar documentação final

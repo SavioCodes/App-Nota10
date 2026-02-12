@@ -1,4 +1,4 @@
-﻿import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   artifacts,
@@ -8,7 +8,9 @@ import {
   InsertDocument,
   InsertFolder,
   InsertSubscription,
+  InsertRevenueCatWebhookEvent,
   InsertUser,
+  revenueCatWebhookEvents,
   reviewItems,
   subscriptions,
   usageCounters,
@@ -176,6 +178,34 @@ export async function upsertRevenueCatSubscription(data: {
       updatedAt: new Date(),
     },
   });
+}
+
+export async function markRevenueCatWebhookEventProcessed(data: {
+  eventId: string;
+  appUserId?: string | null;
+  eventType?: string | null;
+  eventTimestampMs?: number | null;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const values: InsertRevenueCatWebhookEvent = {
+    eventId: data.eventId,
+    appUserId: data.appUserId ?? null,
+    eventType: data.eventType ?? null,
+    eventTimestampMs: data.eventTimestampMs ?? null,
+  };
+
+  try {
+    await db.insert(revenueCatWebhookEvents).values(values);
+    return true;
+  } catch (error: unknown) {
+    const code = (error as { code?: string })?.code;
+    if (code === "ER_DUP_ENTRY") {
+      return false;
+    }
+    throw error;
+  }
 }
 
 export async function syncUserPlanFromSubscriptions(userId: number): Promise<SubscriptionPlan> {
