@@ -8,6 +8,7 @@ import {
   toSourceIds,
   toSummaryContent,
 } from "@/features/artifacts/parsers";
+import { selectChunksByIds } from "./chunks";
 
 type ModeKey = "faithful" | "deepened" | "exam";
 
@@ -87,8 +88,7 @@ export function useResultsData(params: { docId: number; activeMode: ModeKey }) {
   );
 
   const getChunkText = (chunkIds: number[]) => {
-    if (chunkIds.length === 0) return [];
-    return chunks.filter((chunk) => chunkIds.includes(chunk.id));
+    return selectChunksByIds(chunkIds, chunks);
   };
 
   return {
