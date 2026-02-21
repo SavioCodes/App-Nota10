@@ -173,11 +173,10 @@ export async function storageDelete(relKey: string): Promise<void> {
   const key = normalizeKey(relKey);
 
   if (config.provider === "supabase") {
-    const endpoint = `${config.supabaseUrl}/storage/v1/object/${config.bucket}`;
+    const endpoint = `${config.supabaseUrl}/storage/v1/object/${config.bucket}/${encodeURI(key)}`;
     const response = await fetch(endpoint, {
       method: "DELETE",
-      headers: supabaseHeaders(config, "application/json"),
-      body: JSON.stringify({ prefixes: [key] }),
+      headers: supabaseHeaders(config),
     });
 
     if (!response.ok) {

@@ -10,11 +10,12 @@ const envPath = path.resolve(process.cwd(), ".env");
 
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, "utf8");
-  const lines = envContent.split("\n");
+  const lines = envContent.split(/\r?\n/);
 
-  lines.forEach((line) => {
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
     // Skip comments and empty lines
-    if (!line || line.trim().startsWith("#")) return;
+    if (!line || line.startsWith("#")) return;
 
     const match = line.match(/^([^=]+)=(.*)$/);
     if (match) {
