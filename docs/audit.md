@@ -20,6 +20,34 @@ Validacoes executadas em 2026-02-21:
 Pendencias objetivas:
 - Fase 6 (E2E real Web+Mobile + webhook RevenueCat) depende de credenciais/servicos reais no ambiente (`OAuth`, `DB`, `Gemini`, `RevenueCat`).
 
+## Atualizacao 2026-02-21 - Reestruturacao integral (compatibilidade preservada)
+
+Resumo do ciclo:
+- Backend refatorado para arquitetura por dominio:
+  - routers em `server/routers/*.router.ts`
+  - servicos em `server/services/*.service.ts`
+  - composicao central preservada em `server/routers.ts`
+- Camada de dados modularizada:
+  - repositorios em `server/db/*.repo.ts`
+  - `server/db.ts` mantido como barrel compativel
+- Frontend reorganizado para feature modules:
+  - `features/results/*`, `features/export/*`, `features/review/*`
+  - wrappers finos mantidos em `app/*` (rotas sem quebra)
+- Contratos runtime compartilhados adicionados em `shared/schemas/artifacts.ts` (Zod).
+- Documentacao profissional publicada:
+  - `README.md` (EN), `README.pt-BR.md`
+  - `docs/ARCHITECTURE.md`, `docs/PROJECT-STRUCTURE.md`, `docs/USAGE.md`, `docs/API.md`, `docs/RUNBOOK.md`
+  - `CONTRIBUTING.md`
+  - `server/README.md` substituido por guia backend real.
+
+Evidencias da rodada:
+- `corepack pnpm check`: OK
+- `corepack pnpm lint`: OK
+- `corepack pnpm test`: OK (7 suites, 14 testes)
+
+Observacao:
+- O restante deste arquivo mantem historico de auditorias anteriores e pode conter referencias de linha antigas.
+
 ## 1) Resumo executivo
 
 - O projeto compila em TypeScript strict e os testes atuais passam.
