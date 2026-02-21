@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
 import { appLogger } from "@/lib/_core/logger";
+import { resolveMobileSessionUser, toAuthUser } from "@/lib/_core/session-user";
 
 type UseAuthOptions = {
   autoFetch?: boolean;
@@ -28,27 +29,20 @@ export function useAuth(options?: UseAuthOptions) {
           return;
         }
 
-        const nextUser: Auth.User = {
-          id: apiUser.id,
-          openId: apiUser.openId,
-          name: apiUser.name,
-          email: apiUser.email,
-          loginMethod: apiUser.loginMethod,
-          lastSignedIn: new Date(apiUser.lastSignedIn),
-        };
+        const nextUser = toAuthUser(apiUser);
         setUser(nextUser);
         await Auth.setUserInfo(nextUser);
         return;
       }
 
-      const sessionToken = await Auth.getSessionToken();
-      if (!sessionToken) {
-        setUser(null);
-        return;
-      }
-
-      const cachedUser = await Auth.getUserInfo();
-      setUser(cachedUser);
+      const mobileUser = await resolveMobileSessionUser({
+        getSessionToken: Auth.getSessionToken,
+        getCachedUser: Auth.getUserInfo,
+        getMe: Api.getMe,
+        setCachedUser: Auth.setUserInfo,
+        clearCachedUser: Auth.clearUserInfo,
+      });
+      setUser(mobileUser);
     } catch (err) {
       const normalized = err instanceof Error ? err : new Error("Failed to fetch user");
       appLogger.warn("auth.fetch_user_failed", { message: normalized.message });
@@ -82,21 +76,7 @@ export function useAuth(options?: UseAuthOptions) {
       return;
     }
 
-    if (Platform.OS === "web") {
-      fetchUser();
-      return;
-    }
-
-    Auth.getUserInfo()
-      .then((cachedUser) => {
-        if (cachedUser) {
-          setUser(cachedUser);
-          setLoading(false);
-          return;
-        }
-        fetchUser();
-      })
-      .catch(() => fetchUser());
+    fetchUser();
   }, [autoFetch, fetchUser]);
 
   return {
