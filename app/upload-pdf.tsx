@@ -8,6 +8,11 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
+import {
+  getMaxUploadLabel,
+  inferMimeTypeFromFileName,
+  isFileWithinUploadLimit,
+} from "@/lib/_core/upload-constraints";
 
 export default function UploadPdfScreen() {
   const colors = useColors();
@@ -28,12 +33,22 @@ export default function UploadPdfScreen() {
       if (result.canceled || !result.assets[0]) return;
 
       const asset = result.assets[0];
+      const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+      const fileSizeFromInfo =
+        "size" in fileInfo && typeof fileInfo.size === "number" ? fileInfo.size : undefined;
+      const fileSize = typeof asset.size === "number" ? asset.size : fileSizeFromInfo;
+      if (!isFileWithinUploadLimit(fileSize)) {
+        Alert.alert("Arquivo muito grande", `O limite atual e ${getMaxUploadLabel()}.`);
+        return;
+      }
+
       setSelectedFile(asset.name);
       const base64 = await FileSystem.readAsStringAsync(asset.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      await handleUpload(base64, asset.name, asset.mimeType || "application/pdf");
+      const inferredMimeType = inferMimeTypeFromFileName(asset.name, "application/pdf");
+      await handleUpload(base64, asset.name, asset.mimeType || inferredMimeType);
     } catch {
       Alert.alert("Erro", "Nao foi possivel selecionar o arquivo.");
     }

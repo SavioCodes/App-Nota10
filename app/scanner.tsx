@@ -1,12 +1,54 @@
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
+import { getMaxUploadLabel, isFileWithinUploadLimit } from "@/lib/_core/upload-constraints";
+
+function openPermissionSettingsAlert(message: string) {
+  Alert.alert("Permissao necessaria", message, [
+    { text: "Cancelar", style: "cancel" },
+    {
+      text: "Abrir configuracoes",
+      onPress: () => {
+        Linking.openSettings().catch(() => {
+          // no-op
+        });
+      },
+    },
+  ]);
+}
+
+async function ensureCameraPermission() {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (permission.granted) return true;
+
+  if (!permission.canAskAgain) {
+    openPermissionSettingsAlert("Permita o acesso a camera nas configuracoes do sistema.");
+    return false;
+  }
+
+  Alert.alert("Permissao negada", "Sem acesso a camera nao e possivel capturar fotos.");
+  return false;
+}
+
+async function ensureLibraryPermission() {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (permission.granted) return true;
+
+  if (!permission.canAskAgain) {
+    openPermissionSettingsAlert("Permita o acesso a galeria nas configuracoes do sistema.");
+    return false;
+  }
+
+  Alert.alert("Permissao negada", "Sem acesso a galeria nao e possivel selecionar imagens.");
+  return false;
+}
 
 export default function ScannerScreen() {
   const colors = useColors();
@@ -18,19 +60,20 @@ export default function ScannerScreen() {
 
   const pickImage = async (useCamera: boolean) => {
     try {
+      if (useCamera) {
+        const hasPermission = await ensureCameraPermission();
+        if (!hasPermission) return;
+      } else {
+        const hasPermission = await ensureLibraryPermission();
+        if (!hasPermission) return;
+      }
+
       const result = useCamera
-        ? await (async () => {
-            const permission = await ImagePicker.requestCameraPermissionsAsync();
-            if (!permission.granted) {
-              Alert.alert("Permissao necessaria", "Permita o acesso a camera nas configuracoes.");
-              return null;
-            }
-            return ImagePicker.launchCameraAsync({
-              mediaTypes: ["images"],
-              quality: 0.8,
-              base64: true,
-            });
-          })()
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+            base64: true,
+          })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
             quality: 0.8,
@@ -39,8 +82,24 @@ export default function ScannerScreen() {
 
       if (!result || result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
-      if (!asset.base64) return;
-      await handleUpload(asset.base64, asset.fileName || "photo.jpg", asset.mimeType || "image/jpeg");
+      if (!isFileWithinUploadLimit(asset.fileSize)) {
+        Alert.alert("Arquivo muito grande", `O limite atual e ${getMaxUploadLabel()}.`);
+        return;
+      }
+
+      const base64 =
+        asset.base64 ||
+        (asset.uri
+          ? await FileSystem.readAsStringAsync(asset.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            })
+          : "");
+      if (!base64) {
+        Alert.alert("Erro", "Nao foi possivel ler a imagem selecionada.");
+        return;
+      }
+
+      await handleUpload(base64, asset.fileName || "photo.jpg", asset.mimeType || "image/jpeg");
     } catch {
       Alert.alert("Erro", "Nao foi possivel capturar a imagem.");
     }

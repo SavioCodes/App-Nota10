@@ -55,9 +55,12 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: env.iosBundleId,
-    "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSCameraUsageDescription: "Permita acesso a camera para capturar materiais de estudo.",
+      NSPhotoLibraryUsageDescription: "Permita acesso a galeria para selecionar materiais de estudo.",
+      NSPhotoLibraryAddUsageDescription: "Permita salvar arquivos exportados na sua galeria.",
+    },
   },
   android: {
     adaptiveIcon: {
@@ -69,7 +72,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS"],
+    permissions: ["POST_NOTIFICATIONS", "CAMERA", "READ_MEDIA_IMAGES"],
     intentFilters: [
       {
         action: "VIEW",
@@ -95,6 +98,13 @@ const config: ExpoConfig = {
   plugins: [
     "expo-router",
     ...(purchasesPluginEnabled ? ["react-native-purchases"] : []),
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "Permita acesso a galeria para selecionar materiais de estudo.",
+        cameraPermission: "Permita acesso a camera para capturar materiais de estudo.",
+      },
+    ],
     [
       "expo-audio",
       {
