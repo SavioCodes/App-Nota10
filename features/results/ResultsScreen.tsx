@@ -7,6 +7,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
+import { formatRateLimitHint, parseAppError } from "@/lib/_core/app-errors";
 import { FlashcardItem } from "./components/FlashcardItem";
 import { SourceModal } from "./components/SourceModal";
 import { useResultsData } from "./use-results-data";
@@ -52,17 +53,17 @@ export default function ResultsScreen() {
       setFeedback({ kind: "success", message });
     },
     onError: (error) => {
-      const message = error.message || "Nao foi possivel gerar conteudo agora.";
-      if (message.includes("LIMIT_REACHED")) {
+      const parsedError = parseAppError(error);
+      if (parsedError.kind === "limit_reached") {
         Alert.alert("Limite atingido", "Voce atingiu o limite diario do plano gratuito.");
         setFeedback({ kind: "error", message: "Limite diario atingido. Faca upgrade para continuar." });
         return;
       }
-      if (message.includes("RATE_LIMITED")) {
-        setFeedback({ kind: "error", message: "Muitas solicitacoes seguidas. Aguarde alguns segundos." });
+      if (parsedError.kind === "rate_limited") {
+        setFeedback({ kind: "error", message: formatRateLimitHint(parsedError.retryAfterSeconds) });
         return;
       }
-      setFeedback({ kind: "error", message });
+      setFeedback({ kind: "error", message: parsedError.message || "Nao foi possivel gerar conteudo agora." });
     },
   });
 

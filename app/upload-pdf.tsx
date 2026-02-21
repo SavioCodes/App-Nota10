@@ -10,6 +10,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useTargetFolder } from "@/hooks/use-target-folder";
 import { trpc } from "@/lib/trpc";
+import { formatRateLimitHint, parseAppError } from "@/lib/_core/app-errors";
 import {
   getMaxUploadLabel,
   inferMimeTypeFromFileName,
@@ -92,12 +93,14 @@ export default function UploadPdfScreen() {
       await persistFolderPreference(targetFolderId);
       router.replace(`/document/${result.id}`);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "";
-      if (message.includes("LIMIT_REACHED")) {
+      const parsedError = parseAppError(error);
+      if (parsedError.kind === "limit_reached") {
         Alert.alert("Limite atingido", "Voce atingiu o limite diario de conversoes.", [
           { text: "Cancelar", style: "cancel" },
           { text: "Ver Planos", onPress: () => router.push("/paywall") },
         ]);
+      } else if (parsedError.kind === "rate_limited") {
+        Alert.alert("Muitas tentativas", formatRateLimitHint(parsedError.retryAfterSeconds));
       } else {
         Alert.alert("Erro", "Nao foi possivel enviar o documento.");
       }
