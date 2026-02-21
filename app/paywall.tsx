@@ -86,6 +86,14 @@ function isPurchaseCancellationError(error: unknown): error is PurchaseError {
   return "userCancelled" in error;
 }
 
+function envFlag(value: string | undefined, fallback = false): boolean {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
 function getCheckoutBackUrl(): string {
   const configured = (process.env.EXPO_PUBLIC_MERCADOPAGO_RETURN_URL ?? "").trim();
   if (configured.length > 0) return configured;
@@ -125,6 +133,11 @@ export default function PaywallScreen() {
   const colors = useColors();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const isMercadoPagoEnabled = envFlag(
+    process.env.EXPO_PUBLIC_BILLING_MERCADOPAGO_WEB_ENABLED ??
+      process.env.BILLING_MERCADOPAGO_WEB_ENABLED ??
+      "false",
+  );
   const utils = trpc.useUtils();
   const { data: catalog } = trpc.billing.catalog.useQuery(undefined, { enabled: isAuthenticated });
   const webCheckoutMutation = trpc.billing.webCreateSubscription.useMutation();
@@ -137,6 +150,11 @@ export default function PaywallScreen() {
   const handleSubscribe = async (plan: PlanCard) => {
     if (!isAuthenticated) {
       Alert.alert("Login necessario", "Faca login para assinar um plano.");
+      return;
+    }
+
+    if (!isMercadoPagoEnabled) {
+      Alert.alert("Assinaturas indisponiveis", "O checkout Mercado Pago ainda nao foi habilitado neste ambiente.");
       return;
     }
 

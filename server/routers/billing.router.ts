@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { ENV } from "../_core/env";
 import { protectedProcedure, router } from "../_core/trpc";
-import * as db from "../db";
 import { findCatalogPlanByWebProductId, getBillingCatalog } from "../services/billing-catalog.service";
 import { createMercadoPagoWebSubscription } from "../services/billing-mercadopago.service";
 
@@ -43,11 +43,28 @@ export const billingRouter = router({
 
   mobileVerifyPurchase: protectedProcedure
     .input(mobileVerifyInput)
-    .mutation(async ({ ctx, input }) => {
-      // Provider-side token verification is intentionally performed server-side.
-      // In this migration step we persist pending state and rely on later confirmation
-      // handlers to update status after platform verification response.
-      const plan = getBillingCatalog().find(
+    .mutation(async ({ input }) => {
+      if (!ENV.billingNativeIapEnabled) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "BILLING_NATIVE_IAP_DISABLED",
+        });
+      }
+
+      const isConfigured =
+        input.platform === "ios"
+          ? Boolean(ENV.appleIssuerId && ENV.appleKeyId && ENV.applePrivateKeyBase64 && ENV.appleBundleId)
+          : Boolean(ENV.googlePlayPackageName && ENV.googlePlayServiceAccountJsonBase64);
+
+      if (!isConfigured) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "BILLING_MOBILE_VERIFICATION_NOT_CONFIGURED",
+        });
+      }
+
+      // Safety guard: never grant paid entitlement on unverified client payload.
+      const isKnownProduct = getBillingCatalog().some(
         (candidate) =>
           candidate.enabled &&
           (input.platform === "ios"
@@ -55,27 +72,13 @@ export const billingRouter = router({
             : candidate.androidProductId === input.productId),
       );
 
-      if (!plan) {
+      if (!isKnownProduct) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "BILLING_PRODUCT_NOT_FOUND" });
       }
 
-      await db.upsertSubscription({
-        userId: ctx.user.id,
-        plan: plan.id,
-        status: "active",
-        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-        provider: input.platform === "ios" ? "app_store" : "google_play",
-        providerSubscriptionId: input.transactionId,
-        providerCustomerId: ctx.user.openId,
-        productId: input.productId,
-        entitlementId: null,
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "BILLING_MOBILE_VERIFICATION_NOT_IMPLEMENTED",
       });
-
-      await db.syncUserPlanFromSubscriptions(ctx.user.id);
-
-      return {
-        ok: true,
-        plan: plan.id,
-      };
     }),
 });

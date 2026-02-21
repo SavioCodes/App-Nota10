@@ -38,9 +38,7 @@ vi.mock("../server/db", () => {
     incrementDailyUsage: vi.fn(async () => {}),
     getEffectivePlan: vi.fn(async () => "free"),
     getUserByOpenId: vi.fn(async () => undefined),
-    upsertRevenueCatSubscription: vi.fn(async () => {}),
     syncUserPlanFromSubscriptions: vi.fn(async () => "free"),
-    markRevenueCatWebhookEventProcessed: vi.fn(async () => true),
   };
 });
 

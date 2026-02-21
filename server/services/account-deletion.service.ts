@@ -5,7 +5,6 @@ import {
   chunks,
   documents,
   folders,
-  revenueCatWebhookEvents,
   reviewItems,
   subscriptions,
   usageCounters,
@@ -20,7 +19,7 @@ export async function deleteUserAccountWithData(userId: number): Promise<{ delet
   if (!db) throw new Error("Database not available");
 
   const existingUser = await db
-    .select({ id: users.id, openId: users.openId })
+    .select({ id: users.id })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
@@ -64,10 +63,6 @@ export async function deleteUserAccountWithData(userId: number): Promise<{ delet
     await tx.delete(folders).where(eq(folders.userId, userId));
     await tx.delete(subscriptions).where(eq(subscriptions.userId, userId));
     await tx.delete(usageCounters).where(eq(usageCounters.userId, userId));
-
-    if (user.openId) {
-      await tx.delete(revenueCatWebhookEvents).where(eq(revenueCatWebhookEvents.appUserId, user.openId));
-    }
 
     await tx.delete(users).where(eq(users.id, userId));
   });

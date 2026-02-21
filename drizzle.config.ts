@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
 
 const connectionString = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;

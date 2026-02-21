@@ -67,7 +67,6 @@ vi.mock("../server/db", () => {
     updateReviewItem: vi.fn(async () => {}),
     createReviewItems: vi.fn(async () => 0),
     getUserByOpenId: vi.fn(async () => undefined),
-    upsertRevenueCatSubscription: vi.fn(async () => {}),
     syncUserPlanFromSubscriptions: vi.fn(async () => "free"),
   };
 });

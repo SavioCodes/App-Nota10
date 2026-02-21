@@ -57,6 +57,7 @@
 - `catalog`
 - `webCreateSubscription({ webProductId, backUrl })`
 - `mobileVerifyPurchase({ platform, productId, purchaseToken, transactionId, expiresAt? })`
+: guarded endpoint; currently requires server-side validator implementation before entitlement grant.
 
 ## `system`
 

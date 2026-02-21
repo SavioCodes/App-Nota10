@@ -28,10 +28,16 @@ corepack pnpm test
 
 ## Database Operations
 
-Apply migrations:
+Sync schema to PostgreSQL:
 
 ```bash
 corepack pnpm db:push
+```
+
+Generate SQL migration files (optional, repository maintenance):
+
+```bash
+corepack pnpm db:generate
 ```
 
 ## Common Incidents

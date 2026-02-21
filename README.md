@@ -30,7 +30,7 @@ Core flow:
 - Frontend: Expo Router, React Native, NativeWind, React Query, tRPC client
 - Backend: Express, tRPC, Drizzle ORM, Supabase Postgres, Zod
 - AI: Gemini (fast + strict profiles)
-- Billing: RevenueCat
+- Billing: Mercado Pago (web checkout)
 - Tooling: TypeScript strict, ESLint, Vitest, Drizzle Kit
 
 ## Project Structure
@@ -69,7 +69,7 @@ corepack pnpm install
 cp .env.example .env
 ```
 
-Fill required variables (database, OAuth, Gemini, storage, RevenueCat).
+Fill required variables (database, OAuth, Gemini, storage, Mercado Pago).
 
 ### 4) Run in development
 
@@ -87,10 +87,16 @@ corepack pnpm test
 
 ## Database
 
-Generate/apply migrations:
+Sync database schema:
 
 ```bash
 corepack pnpm db:push
+```
+
+Generate SQL migration files (optional):
+
+```bash
+corepack pnpm db:generate
 ```
 
 Schema source: [`drizzle/schema.ts`](./drizzle/schema.ts)

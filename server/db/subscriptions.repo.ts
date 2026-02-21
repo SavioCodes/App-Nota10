@@ -56,7 +56,6 @@ export async function upsertSubscription(data: {
   providerCustomerId?: string | null;
   productId?: string | null;
   entitlementId?: string | null;
-  revenueCatId?: string | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -69,7 +68,6 @@ export async function upsertSubscription(data: {
     provider: data.provider,
     providerSubscriptionId: data.providerSubscriptionId,
     providerCustomerId: data.providerCustomerId ?? null,
-    revenueCatId: data.revenueCatId ?? null,
     productId: data.productId ?? null,
     entitlementId: data.entitlementId ?? null,
   };
@@ -82,7 +80,6 @@ export async function upsertSubscription(data: {
       status: data.status,
       expiresAt: data.expiresAt ?? null,
       providerCustomerId: data.providerCustomerId ?? null,
-      revenueCatId: data.revenueCatId ?? null,
       productId: data.productId ?? null,
       entitlementId: data.entitlementId ?? null,
       updatedAt: new Date(),

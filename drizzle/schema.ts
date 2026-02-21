@@ -1,5 +1,4 @@
 import {
-  bigint,
   date,
   index,
   integer,
@@ -69,7 +68,6 @@ export const subscriptions = pgTable(
     provider: subscriptionProviderEnum("provider").notNull().default("mercado_pago"),
     providerSubscriptionId: varchar("providerSubscriptionId", { length: 191 }).notNull(),
     providerCustomerId: varchar("providerCustomerId", { length: 191 }),
-    revenueCatId: varchar("revenueCatId", { length: 191 }),
     productId: varchar("productId", { length: 191 }),
     entitlementId: varchar("entitlementId", { length: 191 }),
     expiresAt: timestamp("expiresAt", { withTimezone: true }),
@@ -82,31 +80,11 @@ export const subscriptions = pgTable(
       table.provider,
       table.providerSubscriptionId,
     ),
-    revenueCatUnique: uniqueIndex("subscriptions_revenuecat_unique").on(table.revenueCatId),
   }),
 );
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
-
-export const revenueCatWebhookEvents = pgTable(
-  "revenuecat_webhook_events",
-  {
-    id: serial("id").primaryKey(),
-    eventId: varchar("eventId", { length: 191 }).notNull(),
-    appUserId: varchar("appUserId", { length: 191 }),
-    eventType: varchar("eventType", { length: 64 }),
-    eventTimestampMs: bigint("eventTimestampMs", { mode: "number" }),
-    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => ({
-    eventIdUnique: uniqueIndex("revenuecat_webhook_events_event_id_unique").on(table.eventId),
-    appUserIdx: index("revenuecat_webhook_events_app_user_idx").on(table.appUserId),
-  }),
-);
-
-export type RevenueCatWebhookEvent = typeof revenueCatWebhookEvents.$inferSelect;
-export type InsertRevenueCatWebhookEvent = typeof revenueCatWebhookEvents.$inferInsert;
 
 export const billingWebhookEvents = pgTable(
   "billing_webhook_events",
