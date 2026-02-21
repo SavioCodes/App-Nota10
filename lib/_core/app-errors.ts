@@ -1,8 +1,12 @@
 const RATE_LIMITED_RETRY_PATTERN = /RATE_LIMITED_RETRY_AFTER_(\d+)_SECONDS/;
+const FILE_TOO_LARGE_PATTERN = /FILE_TOO_LARGE_MAX_(\d+)_MB/;
+const UNSUPPORTED_MIME_PATTERN = /UNSUPPORTED_MIME_TYPE_(.+)$/;
 
 export type ParsedAppError =
   | { kind: "limit_reached"; message: string }
   | { kind: "rate_limited"; message: string; retryAfterSeconds: number | null }
+  | { kind: "file_too_large"; message: string; maxMb: number | null }
+  | { kind: "unsupported_mime"; message: string; mimeType: string | null }
   | { kind: "unknown"; message: string };
 
 function getErrorMessage(error: unknown): string {
@@ -35,6 +39,20 @@ function extractRetryAfterSeconds(message: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+function extractMaxUploadMb(message: string): number | null {
+  const matched = FILE_TOO_LARGE_PATTERN.exec(message);
+  if (!matched) return null;
+  const parsed = Number.parseInt(matched[1] ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function extractUnsupportedMime(message: string): string | null {
+  const matched = UNSUPPORTED_MIME_PATTERN.exec(message);
+  if (!matched) return null;
+  const value = (matched[1] ?? "").trim();
+  return value.length > 0 ? value : null;
+}
+
 export function parseAppError(error: unknown): ParsedAppError {
   const message = getErrorMessage(error);
 
@@ -50,10 +68,36 @@ export function parseAppError(error: unknown): ParsedAppError {
     };
   }
 
+  if (message.includes("FILE_TOO_LARGE_MAX_")) {
+    return {
+      kind: "file_too_large",
+      message,
+      maxMb: extractMaxUploadMb(message),
+    };
+  }
+
+  if (message.includes("UNSUPPORTED_MIME_TYPE_")) {
+    return {
+      kind: "unsupported_mime",
+      message,
+      mimeType: extractUnsupportedMime(message),
+    };
+  }
+
   return { kind: "unknown", message };
 }
 
 export function formatRateLimitHint(retryAfterSeconds: number | null): string {
   if (!retryAfterSeconds) return "Muitas solicitacoes seguidas. Aguarde alguns segundos.";
   return `Muitas solicitacoes seguidas. Aguarde ${retryAfterSeconds}s e tente novamente.`;
+}
+
+export function formatUploadLimitHint(maxMb: number | null): string {
+  if (!maxMb) return "O arquivo excede o limite permitido para upload.";
+  return `O arquivo excede o limite permitido de ${maxMb} MB.`;
+}
+
+export function formatUnsupportedMimeHint(mimeType: string | null): string {
+  if (!mimeType) return "Tipo de arquivo nao suportado.";
+  return `Tipo de arquivo nao suportado (${mimeType}).`;
 }

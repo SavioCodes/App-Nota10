@@ -10,7 +10,12 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useTargetFolder } from "@/hooks/use-target-folder";
 import { trpc } from "@/lib/trpc";
-import { formatRateLimitHint, parseAppError } from "@/lib/_core/app-errors";
+import {
+  formatRateLimitHint,
+  formatUnsupportedMimeHint,
+  formatUploadLimitHint,
+  parseAppError,
+} from "@/lib/_core/app-errors";
 import {
   getMaxUploadLabel,
   inferMimeTypeFromFileName,
@@ -101,6 +106,10 @@ export default function UploadPdfScreen() {
         ]);
       } else if (parsedError.kind === "rate_limited") {
         Alert.alert("Muitas tentativas", formatRateLimitHint(parsedError.retryAfterSeconds));
+      } else if (parsedError.kind === "file_too_large") {
+        Alert.alert("Arquivo muito grande", formatUploadLimitHint(parsedError.maxMb));
+      } else if (parsedError.kind === "unsupported_mime") {
+        Alert.alert("Formato nao suportado", formatUnsupportedMimeHint(parsedError.mimeType));
       } else {
         Alert.alert("Erro", "Nao foi possivel enviar o documento.");
       }
