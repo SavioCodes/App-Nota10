@@ -23,13 +23,13 @@ export default function UploadPdfScreen() {
   const { folderId: folderIdParam } = useLocalSearchParams<{ folderId?: string }>();
   const folderIdFromParam = folderIdParam ? Number.parseInt(folderIdParam, 10) : NaN;
   const forcedFolderId = Number.isInteger(folderIdFromParam) && folderIdFromParam > 0 ? folderIdFromParam : null;
-  const isFolderLocked = forcedFolderId !== null;
 
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [isFolderPickerVisible, setIsFolderPickerVisible] = useState(false);
 
   const { data: folders } = trpc.folders.list.useQuery();
+  const isFolderLocked = Boolean(forcedFolderId && folders?.some((folder) => folder.id === forcedFolderId));
   const uploadMutation = trpc.documents.upload.useMutation();
   const { selectedFolderId, selectedFolder, targetFolderId, selectFolder, persistFolderPreference } = useTargetFolder(
     folders,

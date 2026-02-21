@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { getPreferredFolderId, setPreferredFolderId } from "@/lib/_core/preferred-folder";
+import { resolveTargetFolderId } from "@/lib/_core/target-folder";
 
 export type TargetFolder = {
   id: number;
@@ -57,7 +58,10 @@ export function useTargetFolder<TFolder extends TargetFolder>(
     [folders, selectedFolderId],
   );
 
-  const targetFolderId = selectedFolderId ?? folders?.[0]?.id ?? null;
+  const targetFolderId = useMemo(
+    () => resolveTargetFolderId(selectedFolderId, folders),
+    [folders, selectedFolderId],
+  );
 
   const selectFolder = useCallback((folderId: number) => {
     setSelectedFolderId(folderId);
