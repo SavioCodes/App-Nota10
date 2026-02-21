@@ -3,13 +3,13 @@ import type {
   FlashcardContent,
   QuestionContent,
   SummaryContent,
-} from "@shared/types";
+} from "../../shared/types";
 import {
   contentMapContentSchema,
   flashcardContentSchema,
   questionContentSchema,
   summaryContentSchema,
-} from "@shared/schemas/artifacts";
+} from "../../shared/schemas/artifacts";
 
 export type ArtifactRecord = {
   id: number;
