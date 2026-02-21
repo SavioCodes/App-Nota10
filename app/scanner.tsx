@@ -4,9 +4,11 @@ import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { useRouter } from "expo-router";
 
+import { FolderPickerModal } from "@/components/folder-picker-modal";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
+import { useTargetFolder } from "@/hooks/use-target-folder";
 import { trpc } from "@/lib/trpc";
 import { getMaxUploadLabel, isFileWithinUploadLimit } from "@/lib/_core/upload-constraints";
 
@@ -54,9 +56,21 @@ export default function ScannerScreen() {
   const colors = useColors();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
+  const [isFolderPickerVisible, setIsFolderPickerVisible] = useState(false);
 
   const { data: folders } = trpc.folders.list.useQuery();
   const uploadMutation = trpc.documents.upload.useMutation();
+  const { selectedFolderId, selectedFolder, targetFolderId, selectFolder, persistFolderPreference } = useTargetFolder(
+    folders,
+  );
+
+  const chooseFolder = () => {
+    if (!folders || folders.length === 0) {
+      Alert.alert("Sem pastas", "Crie uma pasta na Biblioteca antes de enviar documentos.");
+      return;
+    }
+    setIsFolderPickerVisible(true);
+  };
 
   const pickImage = async (useCamera: boolean) => {
     try {
@@ -106,7 +120,7 @@ export default function ScannerScreen() {
   };
 
   const handleUpload = async (base64: string, fileName: string, mimeType: string) => {
-    if (!folders || folders.length === 0) {
+    if (!targetFolderId) {
       Alert.alert("Crie uma pasta", "Va para a Biblioteca e crie uma pasta antes de enviar documentos.");
       return;
     }
@@ -114,12 +128,13 @@ export default function ScannerScreen() {
     setIsUploading(true);
     try {
       const result = await uploadMutation.mutateAsync({
-        folderId: folders[0].id,
+        folderId: targetFolderId,
         title: fileName.replace(/\.[^/.]+$/, ""),
         fileBase64: base64,
         fileName,
         mimeType,
       });
+      await persistFolderPreference(targetFolderId);
       router.replace(`/document/${result.id}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "";
@@ -156,6 +171,27 @@ export default function ScannerScreen() {
         </Pressable>
         <Text className="text-xl font-bold text-foreground">Escanear Material</Text>
       </View>
+
+      <Pressable
+        onPress={chooseFolder}
+        style={({ pressed }) => [
+          styles.folderSelector,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
+      >
+        <IconSymbol name="folder.fill" size={20} color={colors.primary} />
+        <View className="flex-1 ml-2">
+          <Text className="text-xs text-muted">Pasta de destino</Text>
+          <Text className="text-sm font-semibold text-foreground" numberOfLines={1}>
+            {selectedFolder?.name ?? "Selecione uma pasta"}
+          </Text>
+        </View>
+        <IconSymbol name="chevron.down" size={14} color={colors.muted} />
+      </Pressable>
 
       <View className="flex-1 items-center justify-center gap-6">
         <Pressable
@@ -205,6 +241,14 @@ export default function ScannerScreen() {
           </Text>
         </View>
       </View>
+
+      <FolderPickerModal
+        visible={isFolderPickerVisible}
+        folders={folders}
+        selectedFolderId={selectedFolderId}
+        onSelect={selectFolder}
+        onClose={() => setIsFolderPickerVisible(false)}
+      />
     </ScreenContainer>
   );
 }
@@ -231,5 +275,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     width: "100%",
+  },
+  folderSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
   },
 });
