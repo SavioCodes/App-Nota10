@@ -1,45 +1,11 @@
 // Fallback for using MaterialIcons on Android and web.
 
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { SymbolWeight, SymbolViewProps } from "expo-symbols";
-import { ComponentProps } from "react";
+import { SymbolWeight } from "expo-symbols";
 import { OpaqueColorValue, type StyleProp, type TextStyle } from "react-native";
+import { ICON_SYMBOL_MAPPING, type IconSymbolName } from "@/components/ui/icon-symbol.mapping";
 
-type IconMapping = Record<SymbolViewProps["name"], ComponentProps<typeof MaterialIcons>["name"]>;
-type IconSymbolName = keyof typeof MAPPING;
-
-const MAPPING = {
-  "house.fill": "home",
-  "paperplane.fill": "send",
-  "chevron.left.forwardslash.chevron.right": "code",
-  "chevron.right": "chevron-right",
-  "book.fill": "menu-book",
-  "arrow.clockwise": "refresh",
-  "person.fill": "person",
-  "camera.fill": "camera-alt",
-  "doc.fill": "description",
-  "folder.fill": "folder",
-  "clock.fill": "schedule",
-  "star.fill": "star",
-  "checkmark.circle.fill": "check-circle",
-  "xmark.circle.fill": "cancel",
-  "gear": "settings",
-  "magnifyingglass": "search",
-  "plus": "add",
-  "trash.fill": "delete",
-  "square.and.arrow.up": "share",
-  "bolt.fill": "bolt",
-  "flame.fill": "local-fire-department",
-  "brain": "psychology",
-  "lightbulb.fill": "lightbulb",
-  "questionmark.circle.fill": "help",
-  "arrow.left": "arrow-back",
-  "arrow.right": "arrow-forward",
-  "eye.fill": "visibility",
-  "lock.fill": "lock",
-  "crown.fill": "workspace-premium",
-  "photo.fill": "photo-library",
-} as IconMapping;
+const FALLBACK_ICON_NAME = "help-outline";
 
 export function IconSymbol({
   name,
@@ -53,5 +19,6 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+  const materialName = ICON_SYMBOL_MAPPING[name] ?? FALLBACK_ICON_NAME;
+  return <MaterialIcons color={color} size={size} name={materialName} style={style} />;
 }
