@@ -51,11 +51,11 @@ corepack pnpm db:push
 - Confirm `GEMINI_API_KEY`.
 - Validate model names (`GEMINI_FAST_MODEL`, `GEMINI_STRICT_MODEL`).
 
-## 4) RevenueCat sync issues
+## 4) Mercado Pago webhook issues
 
-- Validate webhook secret.
-- Check webhook payload timestamps and replay protection.
-- Confirm `appUserId` maps to existing `openId`.
+- Validate `MERCADOPAGO_WEBHOOK_SECRET`.
+- Confirm webhook URL `/api/billing/webhook/mercadopago` is reachable.
+- Recheck provider event dedupe in `billing_webhook_events`.
 
 ## 5) Upload blocked
 

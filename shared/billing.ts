@@ -3,8 +3,7 @@ export type SubscriptionPlan = "free" | "pro" | "pro_enem";
 export type SubscriptionProvider =
   | "app_store"
   | "google_play"
-  | "mercado_pago"
-  | "revenuecat_legacy";
+  | "mercado_pago";
 
 export type AuthProvider = "supabase_google" | "supabase_apple" | "legacy_oauth";
 

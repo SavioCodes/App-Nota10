@@ -28,7 +28,6 @@ export const subscriptionProviderEnum = pgEnum("subscription_provider", [
   "app_store",
   "google_play",
   "mercado_pago",
-  "revenuecat_legacy",
 ]);
 export const ocrConfidenceEnum = pgEnum("ocr_confidence", ["high", "medium", "low"]);
 export const documentStatusEnum = pgEnum("document_status", [
@@ -67,7 +66,7 @@ export const subscriptions = pgTable(
     userId: integer("userId").notNull(),
     plan: subscriptionPlanEnum("plan").notNull(),
     status: subscriptionStatusEnum("status").notNull().default("active"),
-    provider: subscriptionProviderEnum("provider").notNull().default("revenuecat_legacy"),
+    provider: subscriptionProviderEnum("provider").notNull().default("mercado_pago"),
     providerSubscriptionId: varchar("providerSubscriptionId", { length: 191 }).notNull(),
     providerCustomerId: varchar("providerCustomerId", { length: 191 }),
     revenueCatId: varchar("revenueCatId", { length: 191 }),

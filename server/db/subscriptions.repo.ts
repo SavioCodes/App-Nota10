@@ -1,9 +1,7 @@
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import {
   billingWebhookEvents,
-  revenueCatWebhookEvents,
   subscriptions,
-  type InsertRevenueCatWebhookEvent,
   type InsertSubscription,
   users,
 } from "../../drizzle/schema";
@@ -71,8 +69,7 @@ export async function upsertSubscription(data: {
     provider: data.provider,
     providerSubscriptionId: data.providerSubscriptionId,
     providerCustomerId: data.providerCustomerId ?? null,
-    revenueCatId:
-      data.revenueCatId ?? (data.provider === "revenuecat_legacy" ? data.providerSubscriptionId : null),
+    revenueCatId: data.revenueCatId ?? null,
     productId: data.productId ?? null,
     entitlementId: data.entitlementId ?? null,
   };
@@ -85,62 +82,12 @@ export async function upsertSubscription(data: {
       status: data.status,
       expiresAt: data.expiresAt ?? null,
       providerCustomerId: data.providerCustomerId ?? null,
-      revenueCatId:
-        data.revenueCatId ?? (data.provider === "revenuecat_legacy" ? data.providerSubscriptionId : null),
+      revenueCatId: data.revenueCatId ?? null,
       productId: data.productId ?? null,
       entitlementId: data.entitlementId ?? null,
       updatedAt: new Date(),
     },
   });
-}
-
-// Backward-compatible wrapper used by legacy RevenueCat flow.
-export async function upsertRevenueCatSubscription(data: {
-  userId: number;
-  plan: SubscriptionPlan;
-  status: "active" | "trialing" | "billing_issue" | "canceled" | "expired";
-  expiresAt?: Date | null;
-  revenueCatId: string;
-  productId?: string | null;
-  entitlementId?: string | null;
-}) {
-  return upsertSubscription({
-    userId: data.userId,
-    plan: data.plan,
-    status: data.status,
-    expiresAt: data.expiresAt ?? null,
-    provider: "revenuecat_legacy",
-    providerSubscriptionId: data.revenueCatId,
-    providerCustomerId: data.revenueCatId,
-    revenueCatId: data.revenueCatId,
-    productId: data.productId ?? null,
-    entitlementId: data.entitlementId ?? null,
-  });
-}
-
-export async function markRevenueCatWebhookEventProcessed(data: {
-  eventId: string;
-  appUserId?: string | null;
-  eventType?: string | null;
-  eventTimestampMs?: number | null;
-}): Promise<boolean> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const values: InsertRevenueCatWebhookEvent = {
-    eventId: data.eventId,
-    appUserId: data.appUserId ?? null,
-    eventType: data.eventType ?? null,
-    eventTimestampMs: data.eventTimestampMs ?? null,
-  };
-
-  const result = await db
-    .insert(revenueCatWebhookEvents)
-    .values(values)
-    .onConflictDoNothing({ target: [revenueCatWebhookEvents.eventId] })
-    .returning({ id: revenueCatWebhookEvents.id });
-
-  return result.length > 0;
 }
 
 export async function markBillingWebhookEventProcessed(data: {

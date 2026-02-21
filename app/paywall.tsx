@@ -1,14 +1,13 @@
+import * as Linking from "expo-linking";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 
 import type { ThemeColorPalette } from "@/constants/theme";
-import { REVENUECAT_PRODUCT_IDS } from "@/constants/revenuecat";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
-import { usePurchases } from "@/lib/purchases-provider";
 import { trpc } from "@/lib/trpc";
 import type { BillingCatalogPlan } from "@/shared/billing";
 
@@ -45,13 +44,18 @@ type PlanCard = {
   recommended: boolean;
 };
 
+const DEFAULT_PRODUCT_IDS = {
+  pro: "nota10_pro_monthly",
+  proEnem: "nota10_pro_enem_monthly",
+};
+
 const fallbackPlans: PlanCard[] = [
   {
     id: "pro",
     name: "Pro",
-    webProductId: REVENUECAT_PRODUCT_IDS.pro,
-    iosProductId: REVENUECAT_PRODUCT_IDS.pro,
-    androidProductId: REVENUECAT_PRODUCT_IDS.pro,
+    webProductId: DEFAULT_PRODUCT_IDS.pro,
+    iosProductId: DEFAULT_PRODUCT_IDS.pro,
+    androidProductId: DEFAULT_PRODUCT_IDS.pro,
     price: "R$ 29,90",
     period: "/mes",
     features: planFeatureMap.pro,
@@ -60,9 +64,9 @@ const fallbackPlans: PlanCard[] = [
   {
     id: "pro_enem",
     name: "Pro+ ENEM",
-    webProductId: REVENUECAT_PRODUCT_IDS.proEnem,
-    iosProductId: REVENUECAT_PRODUCT_IDS.proEnem,
-    androidProductId: REVENUECAT_PRODUCT_IDS.proEnem,
+    webProductId: DEFAULT_PRODUCT_IDS.proEnem,
+    iosProductId: DEFAULT_PRODUCT_IDS.proEnem,
+    androidProductId: DEFAULT_PRODUCT_IDS.proEnem,
     price: "R$ 49,90",
     period: "/mes",
     features: planFeatureMap.pro_enem,
@@ -80,6 +84,21 @@ function formatBrl(cents: number): string {
 function isPurchaseCancellationError(error: unknown): error is PurchaseError {
   if (!error || typeof error !== "object") return false;
   return "userCancelled" in error;
+}
+
+function getCheckoutBackUrl(): string {
+  const configured = (process.env.EXPO_PUBLIC_MERCADOPAGO_RETURN_URL ?? "").trim();
+  if (configured.length > 0) return configured;
+
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return `${window.location.origin}/paywall`;
+  }
+
+  if (Platform.OS !== "web") {
+    return Linking.createURL("/paywall");
+  }
+
+  return "https://www.mercadopago.com.br";
 }
 
 function toPlanCards(catalog: BillingCatalogPlan[] | undefined): PlanCard[] {
@@ -106,12 +125,11 @@ export default function PaywallScreen() {
   const colors = useColors();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const { isSupported, isReady, purchaseByProductId, restorePurchases } = usePurchases();
   const utils = trpc.useUtils();
   const { data: catalog } = trpc.billing.catalog.useQuery(undefined, { enabled: isAuthenticated });
   const webCheckoutMutation = trpc.billing.webCreateSubscription.useMutation();
 
-  const [isRestoring, setIsRestoring] = useState(false);
+  const [isSyncingPlan, setIsSyncingPlan] = useState(false);
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
 
   const plans = useMemo(() => toPlanCards(catalog), [catalog]);
@@ -125,36 +143,26 @@ export default function PaywallScreen() {
     setLoadingPlanId(plan.id);
 
     try {
-      if (Platform.OS === "web") {
-        const backUrl = typeof window !== "undefined" ? `${window.location.origin}/paywall` : "";
-        const result = await webCheckoutMutation.mutateAsync({
-          webProductId: plan.webProductId,
-          backUrl,
-        });
+      const result = await webCheckoutMutation.mutateAsync({
+        webProductId: plan.webProductId,
+        backUrl: getCheckoutBackUrl(),
+      });
 
+      if (Platform.OS === "web") {
         if (typeof window !== "undefined") {
           window.location.href = result.checkoutUrl;
         }
         return;
       }
 
-      const mobileProductId = Platform.OS === "ios" ? plan.iosProductId : plan.androidProductId;
-      if (!isSupported) {
-        Alert.alert("Indisponivel", "A compra no app esta disponivel apenas no iOS/Android.");
-        return;
-      }
-      if (!isReady) {
-        Alert.alert("Aguarde", "Inicializando pagamentos. Tente novamente em alguns segundos.");
+      const canOpen = await Linking.canOpenURL(result.checkoutUrl);
+      if (!canOpen) {
+        Alert.alert("Erro", "Nao foi possivel abrir o checkout.");
         return;
       }
 
-      await purchaseByProductId(mobileProductId);
-      await utils.usage.today.invalidate();
-      Alert.alert(
-        "Assinatura concluida",
-        "Compra registrada com sucesso. Seu plano sera atualizado automaticamente.",
-      );
-      router.back();
+      await Linking.openURL(result.checkoutUrl);
+      Alert.alert("Checkout aberto", "Finalize a assinatura no Mercado Pago e depois sincronize seu plano.");
     } catch (error: unknown) {
       const userCancelled = isPurchaseCancellationError(error) && Boolean(error.userCancelled);
       if (!userCancelled) {
@@ -165,26 +173,15 @@ export default function PaywallScreen() {
     }
   };
 
-  const handleRestore = async () => {
-    if (Platform.OS === "web") {
-      Alert.alert("Web", "No web, use sua conta para recuperar o plano automaticamente.");
-      return;
-    }
-
-    if (!isSupported) {
-      Alert.alert("Indisponivel", "Restauracao disponivel apenas no iOS/Android.");
-      return;
-    }
-
-    setIsRestoring(true);
+  const handleSyncPlan = async () => {
+    setIsSyncingPlan(true);
     try {
-      await restorePurchases();
       await utils.usage.today.invalidate();
-      Alert.alert("Restaurado", "Compras restauradas com sucesso.");
+      Alert.alert("Sincronizado", "Plano atualizado com sucesso.");
     } catch {
-      Alert.alert("Erro", "Nao foi possivel restaurar as compras.");
+      Alert.alert("Erro", "Nao foi possivel sincronizar o plano agora.");
     } finally {
-      setIsRestoring(false);
+      setIsSyncingPlan(false);
     }
   };
 
@@ -272,28 +269,26 @@ export default function PaywallScreen() {
         ))}
 
         <Pressable
-          onPress={handleRestore}
-          disabled={isRestoring}
+          onPress={handleSyncPlan}
+          disabled={isSyncingPlan}
           style={({ pressed }) => [
             styles.restoreBtn,
             {
               borderColor: colors.border,
               backgroundColor: colors.surface,
-              opacity: isRestoring ? 0.7 : pressed ? 0.85 : 1,
+              opacity: isSyncingPlan ? 0.7 : pressed ? 0.85 : 1,
             },
           ]}
         >
-          {isRestoring ? (
+          {isSyncingPlan ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
-            <Text className="text-sm font-semibold text-primary">
-              {Platform.OS === "web" ? "Sincronizar Plano" : "Restaurar Compras"}
-            </Text>
+            <Text className="text-sm font-semibold text-primary">Sincronizar plano</Text>
           )}
         </Pressable>
 
         <Text className="text-xs text-muted text-center mt-4 px-4">
-          No web, assinaturas usam Mercado Pago. Em iOS/Android, compras sao processadas pela loja da plataforma.
+          Assinaturas sao processadas via Mercado Pago.
         </Text>
       </ScrollView>
     </ScreenContainer>

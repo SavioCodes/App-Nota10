@@ -26,7 +26,6 @@ export const ENV = {
   dbReadPostgresEnabled: parseBoolean(process.env.DB_READ_POSTGRES, true),
   billingMercadoPagoWebEnabled: parseBoolean(process.env.BILLING_MERCADOPAGO_WEB_ENABLED, false),
   billingNativeIapEnabled: parseBoolean(process.env.BILLING_NATIVE_IAP_ENABLED, false),
-  billingRevenuecatLegacyEnabled: parseBoolean(process.env.BILLING_REVENUECAT_LEGACY_ENABLED, true),
 
   // Supabase
   supabaseUrl: process.env.SUPABASE_URL ?? "",
@@ -43,8 +42,6 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
 
   // Billing providers
-  revenueCatWebhookSecret: process.env.REVENUECAT_WEBHOOK_SECRET ?? "",
-  revenueCatWebhookToleranceSeconds: parseNumber(process.env.REVENUECAT_WEBHOOK_TOLERANCE_SECONDS, 86400),
   mercadoPagoAccessToken: process.env.MERCADOPAGO_ACCESS_TOKEN ?? "",
   mercadoPagoPublicKey: process.env.MERCADOPAGO_PUBLIC_KEY ?? "",
   mercadoPagoWebhookSecret: process.env.MERCADOPAGO_WEBHOOK_SECRET ?? "",
@@ -59,8 +56,6 @@ export const ENV = {
   googlePlayPackageName: process.env.GOOGLE_PLAY_PACKAGE_NAME ?? "",
   googlePlayServiceAccountJsonBase64: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 ?? "",
 
-  rateLimitRevenueCatMax: parseNumber(process.env.RATE_LIMIT_REVENUECAT_MAX, 120),
-  rateLimitRevenueCatWindowMs: parseNumber(process.env.RATE_LIMIT_REVENUECAT_WINDOW_MS, 60000),
   rateLimitUploadMax: parseNumber(process.env.RATE_LIMIT_UPLOAD_MAX, 8),
   rateLimitUploadWindowMs: parseNumber(process.env.RATE_LIMIT_UPLOAD_WINDOW_MS, 60000),
   rateLimitArtifactsMax: parseNumber(process.env.RATE_LIMIT_ARTIFACTS_MAX, 20),

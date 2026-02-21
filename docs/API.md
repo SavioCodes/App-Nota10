@@ -8,7 +8,7 @@
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 - `POST /api/auth/session`
-- `POST /api/revenuecat/webhook`
+- `POST /api/billing/webhook/mercadopago`
 - `POST /api/trpc/*`
 
 ## tRPC Routers
@@ -17,6 +17,7 @@
 
 - `me` -> current user (or null)
 - `logout` -> clears session cookie
+- `deleteAccount` -> deletes user account and related data
 
 ## `folders`
 
@@ -50,6 +51,12 @@
 ## `usage`
 
 - `today`
+
+## `billing`
+
+- `catalog`
+- `webCreateSubscription({ webProductId, backUrl })`
+- `mobileVerifyPurchase({ platform, productId, purchaseToken, transactionId, expiresAt? })`
 
 ## `system`
 

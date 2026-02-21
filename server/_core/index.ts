@@ -5,7 +5,6 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerBillingWebhookRoutes } from "./billing";
 import { registerOAuthRoutes } from "./oauth";
-import { registerRevenueCatWebhookRoutes } from "./revenuecat";
 import { ENV } from "./env";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -100,9 +99,6 @@ async function startServer() {
 
   registerOAuthRoutes(app);
   registerBillingWebhookRoutes(app);
-  if (ENV.billingRevenuecatLegacyEnabled) {
-    registerRevenueCatWebhookRoutes(app);
-  }
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });

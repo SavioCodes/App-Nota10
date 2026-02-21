@@ -1,21 +1,5 @@
 import type { EntitlementState, SubscriptionPlan } from "../../shared/billing";
-import { ENV } from "../_core/env";
 import * as db from "../db";
-
-function planRank(plan: SubscriptionPlan): number {
-  if (plan === "pro_enem") return 2;
-  if (plan === "pro") return 1;
-  return 0;
-}
-
-function pickHigherPlan(current: EntitlementState, candidate: EntitlementState): EntitlementState {
-  if (planRank(candidate.plan) > planRank(current.plan)) return candidate;
-  if (planRank(candidate.plan) < planRank(current.plan)) return current;
-
-  const currentExpiry = current.expiresAt?.getTime() ?? 0;
-  const candidateExpiry = candidate.expiresAt?.getTime() ?? 0;
-  return candidateExpiry > currentExpiry ? candidate : current;
-}
 
 function toStateFromSubscription(
   subscription:
@@ -25,8 +9,11 @@ function toStateFromSubscription(
 ): EntitlementState | null {
   if (!subscription) return null;
   const provider =
-    (subscription.provider as EntitlementState["provider"]) ??
-    (subscription.revenueCatId ? "revenuecat_legacy" : null);
+    subscription.provider === "app_store" ||
+    subscription.provider === "google_play" ||
+    subscription.provider === "mercado_pago"
+      ? subscription.provider
+      : null;
 
   return {
     plan: subscription.plan,
@@ -47,22 +34,7 @@ export async function getEffectiveEntitlement(userId: number): Promise<Entitleme
   const active = await db.getActiveSubscriptionByUserId(userId);
   const primary = toStateFromSubscription(active);
   if (!primary) return fallback;
-
-  // During migration, legacy RevenueCat entries can coexist with newer providers.
-  if (!ENV.billingRevenuecatLegacyEnabled) {
-    return primary.provider === "revenuecat_legacy" ? fallback : primary;
-  }
-
-  const legacy =
-    primary.provider === "revenuecat_legacy"
-      ? primary
-      : await (async () => {
-          const candidate = await db.getActiveSubscriptionByUserId(userId, "revenuecat_legacy");
-          return toStateFromSubscription(candidate);
-        })();
-
-  if (!legacy) return primary;
-  return pickHigherPlan(primary, legacy);
+  return primary.provider ? primary : fallback;
 }
 
 export async function getEffectivePlan(userId: number): Promise<SubscriptionPlan> {
