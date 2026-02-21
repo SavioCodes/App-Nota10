@@ -1,6 +1,16 @@
 const RATE_LIMITED_RETRY_PATTERN = /RATE_LIMITED_RETRY_AFTER_(\d+)_SECONDS/;
 const FILE_TOO_LARGE_PATTERN = /FILE_TOO_LARGE_MAX_(\d+)_MB/;
 const UNSUPPORTED_MIME_PATTERN = /UNSUPPORTED_MIME_TYPE_(.+)$/;
+const TRANSIENT_NETWORK_PATTERNS = [
+  /network request failed/i,
+  /failed to fetch/i,
+  /networkerror/i,
+  /fetch failed/i,
+  /timeout/i,
+  /timed out/i,
+  /econnreset/i,
+  /socket hang up/i,
+];
 
 export type ParsedAppError =
   | { kind: "limit_reached"; message: string }
@@ -22,6 +32,14 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Erro inesperado.";
+}
+
+function hasTransientNetworkCode(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const data = (error as { data?: unknown }).data;
+  if (typeof data !== "object" || data === null) return false;
+  const code = (data as { code?: unknown }).code;
+  return code === "TIMEOUT" || code === "BAD_GATEWAY" || code === "SERVICE_UNAVAILABLE";
 }
 
 function isTooManyRequestsCode(error: unknown): boolean {
@@ -100,4 +118,10 @@ export function formatUploadLimitHint(maxMb: number | null): string {
 export function formatUnsupportedMimeHint(mimeType: string | null): string {
   if (!mimeType) return "Tipo de arquivo nao suportado.";
   return `Tipo de arquivo nao suportado (${mimeType}).`;
+}
+
+export function isTransientNetworkError(error: unknown): boolean {
+  if (hasTransientNetworkCode(error)) return true;
+  const message = getErrorMessage(error);
+  return TRANSIENT_NETWORK_PATTERNS.some((pattern) => pattern.test(message));
 }

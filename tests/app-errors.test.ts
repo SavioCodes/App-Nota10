@@ -4,6 +4,7 @@ import {
   formatRateLimitHint,
   formatUnsupportedMimeHint,
   formatUploadLimitHint,
+  isTransientNetworkError,
   parseAppError,
 } from "../lib/_core/app-errors";
 
@@ -80,5 +81,25 @@ describe("upload formatting helpers", () => {
 
   it("formats unsupported mime fallback hint", () => {
     expect(formatUnsupportedMimeHint(null)).toBe("Tipo de arquivo nao suportado.");
+  });
+});
+
+describe("isTransientNetworkError", () => {
+  it("detects common transient network messages", () => {
+    expect(isTransientNetworkError(new Error("Failed to fetch"))).toBe(true);
+    expect(isTransientNetworkError(new Error("Network request failed"))).toBe(true);
+    expect(isTransientNetworkError(new Error("Request timed out"))).toBe(true);
+  });
+
+  it("detects transient network codes in structured errors", () => {
+    expect(isTransientNetworkError({ message: "gateway issue", data: { code: "BAD_GATEWAY" } })).toBe(true);
+    expect(isTransientNetworkError({ message: "service down", data: { code: "SERVICE_UNAVAILABLE" } })).toBe(
+      true,
+    );
+  });
+
+  it("does not treat domain/business errors as transient network", () => {
+    expect(isTransientNetworkError(new Error("LIMIT_REACHED"))).toBe(false);
+    expect(isTransientNetworkError(new Error("UNSUPPORTED_MIME_TYPE_application/zip"))).toBe(false);
   });
 });

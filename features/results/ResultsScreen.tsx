@@ -7,7 +7,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
-import { formatRateLimitHint, parseAppError } from "@/lib/_core/app-errors";
+import { formatRateLimitHint, isTransientNetworkError, parseAppError } from "@/lib/_core/app-errors";
 import { FlashcardItem } from "./components/FlashcardItem";
 import { SourceModal } from "./components/SourceModal";
 import { useResultsData } from "./use-results-data";
@@ -37,6 +37,8 @@ export default function ResultsScreen() {
     useResultsData({ docId, activeMode });
 
   const generateMutation = trpc.artifacts.generate.useMutation({
+    retry: (failureCount, error) => failureCount < 2 && isTransientNetworkError(error),
+    retryDelay: (attempt) => Math.min(2_000, 400 * 2 ** attempt),
     onSuccess: async (result, variables) => {
       await Promise.all([
         utils.artifacts.list.invalidate({
@@ -53,6 +55,14 @@ export default function ResultsScreen() {
       setFeedback({ kind: "success", message });
     },
     onError: (error) => {
+      if (isTransientNetworkError(error)) {
+        setFeedback({
+          kind: "error",
+          message: "Falha temporaria de conexao. Verifique a internet e tente novamente.",
+        });
+        return;
+      }
+
       const parsedError = parseAppError(error);
       if (parsedError.kind === "limit_reached") {
         Alert.alert("Limite atingido", "Voce atingiu o limite diario do plano gratuito.");
@@ -189,7 +199,11 @@ export default function ResultsScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color={colors.primary} />
           <Text className="text-base text-muted mt-4">
-            {generateMutation.isPending ? "Gerando conteudo..." : "Carregando..."}
+            {generateMutation.isPending
+              ? generateMutation.failureCount > 0
+                ? "Reconectando para concluir a geracao..."
+                : "Gerando conteudo..."
+              : "Carregando..."}
           </Text>
         </View>
       ) : artifacts.length === 0 ? (
