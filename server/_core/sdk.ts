@@ -15,6 +15,7 @@ import type {
   GetUserInfoWithJwtResponse,
 } from "./types/manusTypes";
 import { serverLogger } from "./logger";
+import { authenticateSupabaseBearerToken } from "./supabase-auth";
 // Utility function
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
@@ -250,6 +251,13 @@ class SDKServer {
     let token: string | undefined;
     if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
       token = authHeader.slice("Bearer ".length).trim();
+    }
+
+    if (token) {
+      const supabaseUser = await authenticateSupabaseBearerToken(token);
+      if (supabaseUser) {
+        return supabaseUser;
+      }
     }
 
     const cookies = this.parseCookies(req.headers.cookie);

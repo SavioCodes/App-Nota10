@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { consumeRateLimit } from "../_core/rate-limit";
 import * as db from "../db";
+import { getEffectivePlan } from "./entitlement.service";
 
 export function getTodayIsoDate() {
   return new Date().toISOString().split("T")[0];
@@ -37,7 +38,7 @@ export function assertUserRateLimit(params: {
 }
 
 export async function assertConversionAllowed(userId: number) {
-  const plan = await db.getEffectivePlan(userId);
+  const plan = await getEffectivePlan(userId);
   if (plan !== "free") return plan;
 
   const usage = await db.getDailyUsage(userId, getTodayIsoDate());
@@ -49,7 +50,7 @@ export async function assertConversionAllowed(userId: number) {
 
 export async function consumeConversionIfNeeded(
   userId: number,
-  plan: Awaited<ReturnType<typeof db.getEffectivePlan>>,
+  plan: Awaited<ReturnType<typeof getEffectivePlan>>,
 ) {
   if (plan !== "free") return;
   await db.incrementDailyUsage(userId, getTodayIsoDate());

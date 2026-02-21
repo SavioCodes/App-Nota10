@@ -11,7 +11,7 @@ export async function getUserFolders(userId: number) {
 export async function createFolder(data: InsertFolder) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(folders).values(data).$returningId();
+  const [result] = await db.insert(folders).values(data).returning({ id: folders.id });
   return result.id;
 }
 

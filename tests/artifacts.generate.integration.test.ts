@@ -50,6 +50,7 @@ vi.mock("../server/db", () => {
     createArtifacts,
     syncReviewItemsForDocument,
     getEffectivePlan: vi.fn(async () => "free"),
+    getActiveSubscriptionByUserId: vi.fn(async () => undefined),
     getDailyUsage: vi.fn(async () => ({ conversionCount: 0 })),
     incrementDailyUsage: vi.fn(async () => {}),
     getUserFolders: vi.fn(async () => []),
@@ -81,6 +82,8 @@ function createContext(): TrpcContext {
     user: {
       id: 1,
       openId: "user-open-id",
+      supabaseUserId: null,
+      authProvider: null,
       email: "user@example.com",
       name: "User",
       loginMethod: "oauth",

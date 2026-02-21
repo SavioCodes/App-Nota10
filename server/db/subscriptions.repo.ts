@@ -1,29 +1,34 @@
 import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import {
+  billingWebhookEvents,
   revenueCatWebhookEvents,
   subscriptions,
   type InsertRevenueCatWebhookEvent,
   type InsertSubscription,
   users,
 } from "../../drizzle/schema";
-import type { SubscriptionPlan } from "../../shared/revenuecat";
+import type { SubscriptionPlan, SubscriptionProvider } from "../../shared/billing";
 import { getDb } from "./core";
 
-export async function getActiveSubscriptionByUserId(userId: number) {
+export async function getActiveSubscriptionByUserId(userId: number, provider?: SubscriptionProvider) {
   const db = await getDb();
   if (!db) return undefined;
 
   const now = new Date();
+  const conditions = [
+    eq(subscriptions.userId, userId),
+    inArray(subscriptions.status, ["active", "trialing"]),
+    or(isNull(subscriptions.expiresAt), gt(subscriptions.expiresAt, now)),
+  ];
+
+  if (provider) {
+    conditions.push(eq(subscriptions.provider, provider));
+  }
+
   const rows = await db
     .select()
     .from(subscriptions)
-    .where(
-      and(
-        eq(subscriptions.userId, userId),
-        inArray(subscriptions.status, ["active", "trialing"]),
-        or(isNull(subscriptions.expiresAt), gt(subscriptions.expiresAt, now)),
-      ),
-    )
+    .where(and(...conditions))
     .orderBy(desc(subscriptions.updatedAt))
     .limit(1);
 
@@ -43,14 +48,17 @@ export async function getEffectivePlan(
   return active.plan;
 }
 
-export async function upsertRevenueCatSubscription(data: {
+export async function upsertSubscription(data: {
   userId: number;
   plan: SubscriptionPlan;
   status: "active" | "trialing" | "billing_issue" | "canceled" | "expired";
   expiresAt?: Date | null;
-  revenueCatId: string;
+  provider: SubscriptionProvider;
+  providerSubscriptionId: string;
+  providerCustomerId?: string | null;
   productId?: string | null;
   entitlementId?: string | null;
+  revenueCatId?: string | null;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -60,21 +68,53 @@ export async function upsertRevenueCatSubscription(data: {
     plan: data.plan,
     status: data.status,
     expiresAt: data.expiresAt ?? null,
-    revenueCatId: data.revenueCatId,
+    provider: data.provider,
+    providerSubscriptionId: data.providerSubscriptionId,
+    providerCustomerId: data.providerCustomerId ?? null,
+    revenueCatId:
+      data.revenueCatId ?? (data.provider === "revenuecat_legacy" ? data.providerSubscriptionId : null),
     productId: data.productId ?? null,
     entitlementId: data.entitlementId ?? null,
   };
 
-  await db.insert(subscriptions).values(values).onDuplicateKeyUpdate({
+  await db.insert(subscriptions).values(values).onConflictDoUpdate({
+    target: [subscriptions.provider, subscriptions.providerSubscriptionId],
     set: {
       userId: data.userId,
       plan: data.plan,
       status: data.status,
       expiresAt: data.expiresAt ?? null,
+      providerCustomerId: data.providerCustomerId ?? null,
+      revenueCatId:
+        data.revenueCatId ?? (data.provider === "revenuecat_legacy" ? data.providerSubscriptionId : null),
       productId: data.productId ?? null,
       entitlementId: data.entitlementId ?? null,
       updatedAt: new Date(),
     },
+  });
+}
+
+// Backward-compatible wrapper used by legacy RevenueCat flow.
+export async function upsertRevenueCatSubscription(data: {
+  userId: number;
+  plan: SubscriptionPlan;
+  status: "active" | "trialing" | "billing_issue" | "canceled" | "expired";
+  expiresAt?: Date | null;
+  revenueCatId: string;
+  productId?: string | null;
+  entitlementId?: string | null;
+}) {
+  return upsertSubscription({
+    userId: data.userId,
+    plan: data.plan,
+    status: data.status,
+    expiresAt: data.expiresAt ?? null,
+    provider: "revenuecat_legacy",
+    providerSubscriptionId: data.revenueCatId,
+    providerCustomerId: data.revenueCatId,
+    revenueCatId: data.revenueCatId,
+    productId: data.productId ?? null,
+    entitlementId: data.entitlementId ?? null,
   });
 }
 
@@ -94,16 +134,36 @@ export async function markRevenueCatWebhookEventProcessed(data: {
     eventTimestampMs: data.eventTimestampMs ?? null,
   };
 
-  try {
-    await db.insert(revenueCatWebhookEvents).values(values);
-    return true;
-  } catch (error: unknown) {
-    const code = (error as { code?: string })?.code;
-    if (code === "ER_DUP_ENTRY") {
-      return false;
-    }
-    throw error;
-  }
+  const result = await db
+    .insert(revenueCatWebhookEvents)
+    .values(values)
+    .onConflictDoNothing({ target: [revenueCatWebhookEvents.eventId] })
+    .returning({ id: revenueCatWebhookEvents.id });
+
+  return result.length > 0;
+}
+
+export async function markBillingWebhookEventProcessed(data: {
+  provider: SubscriptionProvider;
+  eventId: string;
+  eventType?: string | null;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .insert(billingWebhookEvents)
+    .values({
+      provider: data.provider,
+      eventId: data.eventId,
+      eventType: data.eventType ?? null,
+    })
+    .onConflictDoNothing({
+      target: [billingWebhookEvents.provider, billingWebhookEvents.eventId],
+    })
+    .returning({ id: billingWebhookEvents.id });
+
+  return result.length > 0;
 }
 
 export async function syncUserPlanFromSubscriptions(userId: number): Promise<SubscriptionPlan> {
@@ -118,6 +178,7 @@ export async function syncUserPlanFromSubscriptions(userId: number): Promise<Sub
     .set({
       subscriptionPlan: plan,
       subscriptionExpiresAt: activeSubscription?.expiresAt ?? null,
+      updatedAt: new Date(),
     })
     .where(eq(users.id, userId));
 

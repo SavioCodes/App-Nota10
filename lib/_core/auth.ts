@@ -15,7 +15,9 @@ export type User = {
 
 export async function getSessionToken(): Promise<string | null> {
   try {
-    if (Platform.OS === "web") return null;
+    if (Platform.OS === "web") {
+      return window.localStorage.getItem(SESSION_TOKEN_KEY);
+    }
     return await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
   } catch (error) {
     appLogger.warn("auth.session_token_read_failed", {
@@ -27,7 +29,10 @@ export async function getSessionToken(): Promise<string | null> {
 
 export async function setSessionToken(token: string): Promise<void> {
   try {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web") {
+      window.localStorage.setItem(SESSION_TOKEN_KEY, token);
+      return;
+    }
     await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
   } catch (error) {
     appLogger.error("auth.session_token_write_failed", {
@@ -39,7 +44,10 @@ export async function setSessionToken(token: string): Promise<void> {
 
 export async function removeSessionToken(): Promise<void> {
   try {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web") {
+      window.localStorage.removeItem(SESSION_TOKEN_KEY);
+      return;
+    }
     await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
   } catch (error) {
     appLogger.warn("auth.session_token_delete_failed", {

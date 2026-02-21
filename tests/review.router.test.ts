@@ -70,6 +70,8 @@ function createContext(): TrpcContext {
     user: {
       id: 1,
       openId: "user-open-id",
+      supabaseUserId: null,
+      authProvider: null,
       email: "user@example.com",
       name: "User",
       loginMethod: "oauth",

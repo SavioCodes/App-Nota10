@@ -1,6 +1,8 @@
 import * as Linking from "expo-linking";
 import * as ReactNative from "react-native";
 
+import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase/client";
+
 const env = {
   portal: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? "",
   server: process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ?? "",
@@ -54,7 +56,12 @@ const encodeState = (value: string) => {
 };
 
 export const getRedirectUri = () => {
+  const supabaseEnabled = isSupabaseAuthEnabled();
+
   if (ReactNative.Platform.OS === "web") {
+    if (supabaseEnabled && typeof window !== "undefined") {
+      return `${window.location.origin}/oauth/callback`;
+    }
     return `${getApiBaseUrl()}/api/oauth/callback`;
   }
 
@@ -77,7 +84,55 @@ export const getLoginUrl = () => {
   return url.toString();
 };
 
+async function startSupabaseOAuthLogin(): Promise<string | null> {
+  const supabase = getSupabaseClient();
+  const provider: "google" | "apple" =
+    ReactNative.Platform.OS === "ios" ? "apple" : "google";
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: getRedirectUri(),
+      skipBrowserRedirect: true,
+      queryParams: provider === "google" ? { access_type: "offline", prompt: "consent" } : undefined,
+    },
+  });
+
+  if (error) {
+    return null;
+  }
+
+  const loginUrl = data?.url;
+  if (!loginUrl) {
+    return null;
+  }
+
+  if (ReactNative.Platform.OS === "web") {
+    if (typeof window !== "undefined") {
+      window.location.href = loginUrl;
+    }
+    return loginUrl;
+  }
+
+  const supported = await Linking.canOpenURL(loginUrl);
+  if (!supported) {
+    return null;
+  }
+
+  try {
+    await Linking.openURL(loginUrl);
+  } catch {
+    return null;
+  }
+
+  return loginUrl;
+}
+
 export async function startOAuthLogin(): Promise<string | null> {
+  if (isSupabaseAuthEnabled()) {
+    return startSupabaseOAuthLogin();
+  }
+
   const loginUrl = getLoginUrl();
   if (ReactNative.Platform.OS === "web") {
     if (typeof window !== "undefined") {

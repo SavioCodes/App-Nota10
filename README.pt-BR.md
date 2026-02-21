@@ -28,7 +28,7 @@ Fluxo principal:
 ## Stack Técnica
 
 - Frontend: Expo Router, React Native, NativeWind, React Query, tRPC client
-- Backend: Express, tRPC, Drizzle ORM, MySQL/TiDB, Zod
+- Backend: Express, tRPC, Drizzle ORM, Supabase Postgres, Zod
 - IA: Gemini (perfil rápido + estrito)
 - Billing: RevenueCat
 - Tooling: TypeScript strict, ESLint, Vitest, Drizzle Kit
@@ -55,7 +55,7 @@ Mapa completo: [`docs/PROJECT-STRUCTURE.md`](./docs/PROJECT-STRUCTURE.md)
 - Node.js 22+
 - Corepack habilitado
 - pnpm 9.x
-- Instância MySQL/TiDB
+- Instância Supabase Postgres
 
 ### 2) Instalação
 

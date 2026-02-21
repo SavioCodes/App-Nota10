@@ -24,7 +24,7 @@ export async function getDocument(id: number, userId?: number) {
 export async function createDocument(data: InsertDocument) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [result] = await db.insert(documents).values(data).$returningId();
+  const [result] = await db.insert(documents).values(data).returning({ id: documents.id });
   return result.id;
 }
 
@@ -95,15 +95,13 @@ export async function createChunks(
           startOffset: number;
           endOffset: number;
         }[]
-      ).map(
-        (chunk) => ({
-          documentId,
-          chunkOrder: chunk.chunkOrder,
-          textContent: chunk.textContent,
-          startOffset: chunk.startOffset,
-          endOffset: chunk.endOffset,
-        }),
-      );
+      ).map((chunk) => ({
+        documentId,
+        chunkOrder: chunk.chunkOrder,
+        textContent: chunk.textContent,
+        startOffset: chunk.startOffset,
+        endOffset: chunk.endOffset,
+      }));
 
   await db.insert(chunks).values(values);
 }

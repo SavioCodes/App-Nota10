@@ -1,4 +1,4 @@
-export type SubscriptionPlan = "free" | "pro" | "pro_enem";
+import type { SubscriptionPlan } from "./billing";
 
 export const REVENUECAT_PRODUCT_IDS = {
   pro: "nota10_pro_monthly",

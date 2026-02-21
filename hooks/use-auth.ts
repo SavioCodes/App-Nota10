@@ -5,6 +5,7 @@ import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
 import { appLogger } from "@/lib/_core/logger";
 import { resolveMobileSessionUser, toAuthUser } from "@/lib/_core/session-user";
+import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase/client";
 
 type UseAuthOptions = {
   autoFetch?: boolean;
@@ -61,6 +62,15 @@ export function useAuth(options?: UseAuthOptions) {
         message: err instanceof Error ? err.message : "unknown_error",
       });
     } finally {
+      if (isSupabaseAuthEnabled()) {
+        try {
+          await getSupabaseClient().auth.signOut();
+        } catch (err) {
+          appLogger.warn("auth.supabase_logout_failed", {
+            message: err instanceof Error ? err.message : "unknown_error",
+          });
+        }
+      }
       await Auth.removeSessionToken();
       await Auth.clearUserInfo();
       setUser(null);

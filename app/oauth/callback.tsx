@@ -8,6 +8,8 @@ import { ThemedView } from "@/components/themed-view";
 import * as Api from "@/lib/_core/api";
 import * as Auth from "@/lib/_core/auth";
 import { appLogger } from "@/lib/_core/logger";
+import { toAuthUser } from "@/lib/_core/session-user";
+import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase/client";
 
 type CallbackStatus = "processing" | "success" | "error";
 type QueryUser = {
@@ -42,6 +44,14 @@ function buildAuthUser(raw: QueryUser | null | undefined): Auth.User | null {
   };
 }
 
+function parseHashParams(url: string | null | undefined): URLSearchParams {
+  if (!url) return new URLSearchParams();
+  const hashIndex = url.indexOf("#");
+  if (hashIndex < 0) return new URLSearchParams();
+  const hash = url.slice(hashIndex + 1);
+  return new URLSearchParams(hash);
+}
+
 export default function OAuthCallback() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -50,6 +60,8 @@ export default function OAuthCallback() {
     error?: string;
     sessionToken?: string;
     user?: string;
+    access_token?: string;
+    refresh_token?: string;
   }>();
   const [status, setStatus] = useState<CallbackStatus>("processing");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -60,6 +72,52 @@ export default function OAuthCallback() {
         if (params.error) {
           setStatus("error");
           setErrorMessage(params.error);
+          return;
+        }
+
+        if (isSupabaseAuthEnabled()) {
+          const supabase = getSupabaseClient();
+          const initialUrl = await Linking.getInitialURL();
+          const hashParams = parseHashParams(initialUrl);
+
+          const accessToken = params.access_token || hashParams.get("access_token") || undefined;
+          const refreshToken = params.refresh_token || hashParams.get("refresh_token") || undefined;
+          const authCode = params.code || hashParams.get("code") || undefined;
+
+          if (accessToken && refreshToken) {
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (error) {
+              throw new Error(error.message);
+            }
+          } else if (authCode) {
+            const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+            if (error) {
+              throw new Error(error.message);
+            }
+          }
+
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          if (!session?.access_token) {
+            setStatus("error");
+            setErrorMessage("No Supabase session token received.");
+            return;
+          }
+
+          await Auth.setSessionToken(session.access_token);
+
+          const apiUser = await Api.getMe();
+          if (apiUser) {
+            await Auth.setUserInfo(toAuthUser(apiUser));
+          }
+
+          setStatus("success");
+          setTimeout(() => router.replace("/(tabs)"), 800);
           return;
         }
 
@@ -118,7 +176,7 @@ export default function OAuthCallback() {
     };
 
     run();
-  }, [params.code, params.error, params.sessionToken, params.state, params.user, router]);
+  }, [params.access_token, params.code, params.error, params.refresh_token, params.sessionToken, params.state, params.user, router]);
 
   return (
     <SafeAreaView className="flex-1" edges={["top", "bottom", "left", "right"]}>

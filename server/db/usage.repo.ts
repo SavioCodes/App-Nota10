@@ -19,5 +19,8 @@ export async function incrementDailyUsage(userId: number, date: string) {
   await db
     .insert(usageCounters)
     .values({ userId, date, conversionCount: 1 })
-    .onDuplicateKeyUpdate({ set: { conversionCount: sql`${usageCounters.conversionCount} + 1` } });
+    .onConflictDoUpdate({
+      target: [usageCounters.userId, usageCounters.date],
+      set: { conversionCount: sql`${usageCounters.conversionCount} + 1` },
+    });
 }

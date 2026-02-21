@@ -1,5 +1,3 @@
-import { Platform } from "react-native";
-
 import { getApiBaseUrl } from "@/constants/oauth";
 import * as Auth from "@/lib/_core/auth";
 import { appLogger } from "@/lib/_core/logger";
@@ -10,11 +8,9 @@ export async function apiCall<T>(endpoint: string, options: RequestInit = {}): P
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  if (Platform.OS !== "web") {
-    const sessionToken = await Auth.getSessionToken();
-    if (sessionToken) {
-      headers.Authorization = `Bearer ${sessionToken}`;
-    }
+  const sessionToken = await Auth.getSessionToken();
+  if (sessionToken) {
+    headers.Authorization = `Bearer ${sessionToken}`;
   }
 
   const baseUrl = getApiBaseUrl();

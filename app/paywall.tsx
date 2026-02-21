@@ -1,6 +1,6 @@
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { ThemeColorPalette } from "@/constants/theme";
 import { REVENUECAT_PRODUCT_IDS } from "@/constants/revenuecat";
@@ -10,47 +10,96 @@ import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { usePurchases } from "@/lib/purchases-provider";
 import { trpc } from "@/lib/trpc";
+import type { BillingCatalogPlan } from "@/shared/billing";
 
-const plans = [
-  {
-    id: "pro",
-    name: "Pro",
-    productId: REVENUECAT_PRODUCT_IDS.pro,
-    price: "R$ 29,90",
-    period: "/mes",
-    features: [
-      "Conversoes ilimitadas",
-      "Exportacao PDF",
-      "Modo Aprofundar",
-      "Revisao espaciada completa",
-      "Suporte prioritario",
-    ],
-    recommended: true,
-  },
-  {
-    id: "pro_enem",
-    name: "Pro+ ENEM",
-    productId: REVENUECAT_PRODUCT_IDS.proEnem,
-    price: "R$ 49,90",
-    period: "/mes",
-    features: [
-      "Tudo do Pro",
-      "Modo Prova (questoes estilo ENEM)",
-      "Banco de questoes por competencia",
-      "Simulados personalizados",
-      "Analise de desempenho",
-    ],
-    recommended: false,
-  },
-] as const;
+const planFeatureMap: Record<"pro" | "pro_enem", string[]> = {
+  pro: [
+    "Conversoes ilimitadas",
+    "Exportacao PDF",
+    "Modo Aprofundar",
+    "Revisao espaciada completa",
+    "Suporte prioritario",
+  ],
+  pro_enem: [
+    "Tudo do Pro",
+    "Modo Prova (questoes estilo ENEM)",
+    "Banco de questoes por competencia",
+    "Simulados personalizados",
+    "Analise de desempenho",
+  ],
+};
 
 type PurchaseError = {
   userCancelled?: boolean;
 };
 
+type PlanCard = {
+  id: "pro" | "pro_enem";
+  name: string;
+  webProductId: string;
+  iosProductId: string;
+  androidProductId: string;
+  price: string;
+  period: string;
+  features: string[];
+  recommended: boolean;
+};
+
+const fallbackPlans: PlanCard[] = [
+  {
+    id: "pro",
+    name: "Pro",
+    webProductId: REVENUECAT_PRODUCT_IDS.pro,
+    iosProductId: REVENUECAT_PRODUCT_IDS.pro,
+    androidProductId: REVENUECAT_PRODUCT_IDS.pro,
+    price: "R$ 29,90",
+    period: "/mes",
+    features: planFeatureMap.pro,
+    recommended: true,
+  },
+  {
+    id: "pro_enem",
+    name: "Pro+ ENEM",
+    webProductId: REVENUECAT_PRODUCT_IDS.proEnem,
+    iosProductId: REVENUECAT_PRODUCT_IDS.proEnem,
+    androidProductId: REVENUECAT_PRODUCT_IDS.proEnem,
+    price: "R$ 49,90",
+    period: "/mes",
+    features: planFeatureMap.pro_enem,
+    recommended: false,
+  },
+];
+
+function formatBrl(cents: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(cents / 100);
+}
+
 function isPurchaseCancellationError(error: unknown): error is PurchaseError {
   if (!error || typeof error !== "object") return false;
   return "userCancelled" in error;
+}
+
+function toPlanCards(catalog: BillingCatalogPlan[] | undefined): PlanCard[] {
+  if (!catalog || catalog.length === 0) return fallbackPlans;
+
+  const mapped = catalog
+    .filter((plan) => plan.enabled)
+    .map((plan) => ({
+      id: plan.id,
+      name: plan.displayName,
+      webProductId: plan.webProductId,
+      iosProductId: plan.iosProductId,
+      androidProductId: plan.androidProductId,
+      price: formatBrl(plan.monthlyPriceCents),
+      period: "/mes",
+      features: planFeatureMap[plan.id],
+      recommended: plan.id === "pro",
+    }));
+
+  return mapped.length > 0 ? mapped : fallbackPlans;
 }
 
 export default function PaywallScreen() {
@@ -59,26 +108,47 @@ export default function PaywallScreen() {
   const { isAuthenticated } = useAuth();
   const { isSupported, isReady, purchaseByProductId, restorePurchases } = usePurchases();
   const utils = trpc.useUtils();
+  const { data: catalog } = trpc.billing.catalog.useQuery(undefined, { enabled: isAuthenticated });
+  const webCheckoutMutation = trpc.billing.webCreateSubscription.useMutation();
+
   const [isRestoring, setIsRestoring] = useState(false);
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
 
-  const handleSubscribe = async (plan: (typeof plans)[number]) => {
+  const plans = useMemo(() => toPlanCards(catalog), [catalog]);
+
+  const handleSubscribe = async (plan: PlanCard) => {
     if (!isAuthenticated) {
       Alert.alert("Login necessario", "Faca login para assinar um plano.");
       return;
     }
-    if (!isSupported) {
-      Alert.alert("Indisponivel", "A compra no app esta disponivel apenas no iOS/Android.");
-      return;
-    }
-    if (!isReady) {
-      Alert.alert("Aguarde", "Inicializando pagamentos. Tente novamente em alguns segundos.");
-      return;
-    }
 
     setLoadingPlanId(plan.id);
+
     try {
-      await purchaseByProductId(plan.productId);
+      if (Platform.OS === "web") {
+        const backUrl = typeof window !== "undefined" ? `${window.location.origin}/paywall` : "";
+        const result = await webCheckoutMutation.mutateAsync({
+          webProductId: plan.webProductId,
+          backUrl,
+        });
+
+        if (typeof window !== "undefined") {
+          window.location.href = result.checkoutUrl;
+        }
+        return;
+      }
+
+      const mobileProductId = Platform.OS === "ios" ? plan.iosProductId : plan.androidProductId;
+      if (!isSupported) {
+        Alert.alert("Indisponivel", "A compra no app esta disponivel apenas no iOS/Android.");
+        return;
+      }
+      if (!isReady) {
+        Alert.alert("Aguarde", "Inicializando pagamentos. Tente novamente em alguns segundos.");
+        return;
+      }
+
+      await purchaseByProductId(mobileProductId);
       await utils.usage.today.invalidate();
       Alert.alert(
         "Assinatura concluida",
@@ -96,6 +166,11 @@ export default function PaywallScreen() {
   };
 
   const handleRestore = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert("Web", "No web, use sua conta para recuperar o plano automaticamente.");
+      return;
+    }
+
     if (!isSupported) {
       Alert.alert("Indisponivel", "Restauracao disponivel apenas no iOS/Android.");
       return;
@@ -211,12 +286,14 @@ export default function PaywallScreen() {
           {isRestoring ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
-            <Text className="text-sm font-semibold text-primary">Restaurar Compras</Text>
+            <Text className="text-sm font-semibold text-primary">
+              {Platform.OS === "web" ? "Sincronizar Plano" : "Restaurar Compras"}
+            </Text>
           )}
         </Pressable>
 
         <Text className="text-xs text-muted text-center mt-4 px-4">
-          A assinatura sera cobrada na sua conta da App Store/Google Play. Cancele a qualquer momento nas configuracoes da loja.
+          No web, assinaturas usam Mercado Pago. Em iOS/Android, compras sao processadas pela loja da plataforma.
         </Text>
       </ScrollView>
     </ScreenContainer>

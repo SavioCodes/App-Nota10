@@ -162,15 +162,10 @@ export async function createReviewItems(data: {
   const toInsert = uniqueRows.filter((row) => !existingIds.has(row.artifactId));
   if (toInsert.length === 0) return 0;
 
-  try {
-    await db.insert(reviewItems).values(toInsert);
-  } catch (error: unknown) {
-    // Ignore duplicate races. The unique index guarantees idempotency.
-    const code = (error as { code?: string })?.code;
-    if (code !== "ER_DUP_ENTRY") {
-      throw error;
-    }
-  }
+  await db
+    .insert(reviewItems)
+    .values(toInsert)
+    .onConflictDoNothing({ target: [reviewItems.userId, reviewItems.artifactId] });
 
   return toInsert.length;
 }

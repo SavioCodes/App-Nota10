@@ -48,12 +48,13 @@ export const documentsRouter = router({
       assertUploadSize(fileBuffer);
 
       const fileKey = `docs/${ctx.user.id}/${Date.now()}-${input.fileName}`;
-      const { url } = await storagePut(fileKey, fileBuffer, input.mimeType);
+      const { key, url } = await storagePut(fileKey, fileBuffer, input.mimeType);
       const docId = await db.createDocument({
         folderId: input.folderId,
         userId: ctx.user.id,
         title: input.title,
         originalFileUrl: url,
+        originalFileKey: key,
         status: "extracting",
       });
 
