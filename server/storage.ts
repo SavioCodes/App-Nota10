@@ -50,7 +50,11 @@ function toFormData(
   const blob =
     typeof data === "string"
       ? new Blob([data], { type: contentType })
-      : new Blob([data as any], { type: contentType });
+      : (() => {
+          const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+          const copy = new Uint8Array(bytes);
+          return new Blob([copy.buffer], { type: contentType });
+        })();
   const form = new FormData();
   form.append("file", blob, fileName || "file");
   return form;

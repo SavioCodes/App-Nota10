@@ -10,13 +10,13 @@
 
 import { Platform } from "react-native";
 import type { Metrics } from "react-native-safe-area-context";
+import { appLogger } from "@/lib/_core/logger";
 
-// Debug logging with timestamps
-const DEBUG = true;
+// Enable debug logs only when explicitly requested.
+const DEBUG = process.env.EXPO_PUBLIC_APP_LOG_LEVEL === "debug";
 const log = (msg: string) => {
   if (!DEBUG) return;
-  const ts = new Date().toISOString();
-  console.log(`[ManusRuntime ${ts}] ${msg}`);
+  appLogger.debug("manus_runtime", { message: msg });
 };
 
 type MessageType = "appDevServerReady";

@@ -27,6 +27,7 @@ vi.mock("../server/db", () => {
       })),
     );
   });
+  const syncReviewItemsForDocument = vi.fn(async () => ({ seededCount: 0, validFlashcards: 0 }));
 
   return {
     getDocument: vi.fn(async (id: number) => ({
@@ -47,6 +48,7 @@ vi.mock("../server/db", () => {
     ]),
     getDocumentArtifacts,
     createArtifacts,
+    syncReviewItemsForDocument,
     getEffectivePlan: vi.fn(async () => "free"),
     getDailyUsage: vi.fn(async () => ({ conversionCount: 0 })),
     incrementDailyUsage: vi.fn(async () => {}),
@@ -62,7 +64,7 @@ vi.mock("../server/db", () => {
     getUserReviewItems: vi.fn(async () => []),
     getAllUserReviewItems: vi.fn(async () => []),
     updateReviewItem: vi.fn(async () => {}),
-    createReviewItems: vi.fn(async () => {}),
+    createReviewItems: vi.fn(async () => 0),
     getUserByOpenId: vi.fn(async () => undefined),
     upsertRevenueCatSubscription: vi.fn(async () => {}),
     syncUserPlanFromSubscriptions: vi.fn(async () => "free"),
@@ -188,6 +190,7 @@ describe("artifacts.generate integration", () => {
 
     expect(mockedDb.createArtifacts).toHaveBeenCalledTimes(1);
     expect(mockedDb.incrementDailyUsage).toHaveBeenCalledTimes(1);
+    expect(mockedDb.syncReviewItemsForDocument).toHaveBeenCalledTimes(2);
   });
 });
 

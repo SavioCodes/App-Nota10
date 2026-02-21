@@ -1,4 +1,16 @@
-import { index, int, mysqlEnum, mysqlTable, text, timestamp, varchar, float, json, uniqueIndex, bigint } from "drizzle-orm/mysql-core";
+import {
+  bigint,
+  float,
+  index,
+  int,
+  json,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -124,7 +136,11 @@ export const reviewItems = mysqlTable("review_items", {
   interval: int("interval").default(1).notNull(),
   streak: int("streak").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  userArtifactUnique: uniqueIndex("review_items_user_artifact_unique").on(table.userId, table.artifactId),
+  userNextReviewIdx: index("review_items_user_next_review_idx").on(table.userId, table.nextReviewAt),
+  userDocumentIdx: index("review_items_user_document_idx").on(table.userId, table.documentId),
+}));
 
 export type ReviewItem = typeof reviewItems.$inferSelect;
 

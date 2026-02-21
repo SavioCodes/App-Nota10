@@ -1,11 +1,10 @@
-import { Text, View, Pressable, ActivityIndicator, Dimensions } from "react-native";
+import { ActivityIndicator, Dimensions, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
-import { useState, useMemo } from "react";
-import { StyleSheet, Platform } from "react-native";
+import { useState } from "react";
 import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get("window");
@@ -14,15 +13,16 @@ export default function ReviewSessionScreen() {
   const colors = useColors();
   const router = useRouter();
 
-  const { data: reviewItems, isLoading, refetch } = trpc.review.today.useQuery();
+  const { data: reviewItems, isLoading } = trpc.review.today.useQuery();
   const answerMutation = trpc.review.answer.useMutation();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [completed, setCompleted] = useState(0);
 
-  // Fetch artifact content for each review item
   const currentItem = reviewItems?.[currentIndex];
+  const currentFront = currentItem?.front?.trim() || "Pergunta indisponivel";
+  const currentBack = currentItem?.back?.trim() || "Resposta indisponivel";
 
   const handleAnswer = async (quality: number) => {
     if (!currentItem) return;
@@ -40,7 +40,7 @@ export default function ReviewSessionScreen() {
         reviewItemId: currentItem.id,
         quality,
       });
-    } catch (e) {
+    } catch {
       // Continue even if mutation fails
     }
 
@@ -116,7 +116,7 @@ export default function ReviewSessionScreen() {
         >
           <Text className="text-xs text-muted mb-4">{flipped ? "RESPOSTA" : "PERGUNTA"}</Text>
           <Text className="text-xl font-medium text-foreground text-center leading-8">
-            Flashcard #{currentItem?.artifactId}
+            {flipped ? currentBack : currentFront}
           </Text>
           <Text className="text-sm text-muted mt-6">Toque para {flipped ? "ver pergunta" : "ver resposta"}</Text>
         </Pressable>

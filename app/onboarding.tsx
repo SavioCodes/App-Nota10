@@ -1,11 +1,8 @@
-import { Text, View, Pressable, Dimensions } from "react-native";
+import { Dimensions, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useRouter } from "expo-router";
 import { useState, useRef } from "react";
-import { FlatList } from "react-native";
-import { StyleSheet } from "react-native";
 import { startOAuthLogin } from "@/constants/oauth";
 
 const { width } = Dimensions.get("window");
@@ -33,7 +30,6 @@ const slides = [
 
 export default function OnboardingScreen() {
   const colors = useColors();
-  const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 

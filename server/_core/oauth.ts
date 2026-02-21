@@ -51,8 +51,13 @@ function buildUserResponse(
         lastSignedIn?: Date | null;
       },
 ) {
+  const userId =
+    user && typeof user === "object" && "id" in user && typeof user.id === "number"
+      ? user.id
+      : null;
+
   return {
-    id: (user as any)?.id ?? null,
+    id: userId,
     openId: user?.openId ?? null,
     name: user?.name ?? null,
     email: user?.email ?? null,

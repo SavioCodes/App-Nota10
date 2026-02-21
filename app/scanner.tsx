@@ -1,82 +1,76 @@
-import { Text, View, Pressable, Alert, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+
+import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { useRouter } from "expo-router";
-import { useState } from "react";
-import { StyleSheet, Platform } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 import { trpc } from "@/lib/trpc";
 
 export default function ScannerScreen() {
   const colors = useColors();
   const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const { data: folders } = trpc.folders.list.useQuery();
   const uploadMutation = trpc.documents.upload.useMutation();
 
   const pickImage = async (useCamera: boolean) => {
     try {
-      let result;
-      if (useCamera) {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert("Permissão necessária", "Permita o acesso à câmera nas configurações.");
-          return;
-        }
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ["images"],
-          quality: 0.8,
-          base64: true,
-        });
-      } else {
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          quality: 0.8,
-          base64: true,
-        });
-      }
+      const result = useCamera
+        ? await (async () => {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) {
+              Alert.alert("Permissao necessaria", "Permita o acesso a camera nas configuracoes.");
+              return null;
+            }
+            return ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              quality: 0.8,
+              base64: true,
+            });
+          })()
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ["images"],
+            quality: 0.8,
+            base64: true,
+          });
 
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-        if (asset.base64) {
-          setSelectedImage(asset.uri);
-          await handleUpload(asset.base64, asset.fileName || "photo.jpg", asset.mimeType || "image/jpeg");
-        }
-      }
-    } catch (error) {
-      Alert.alert("Erro", "Não foi possível capturar a imagem.");
+      if (!result || result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      if (!asset.base64) return;
+      await handleUpload(asset.base64, asset.fileName || "photo.jpg", asset.mimeType || "image/jpeg");
+    } catch {
+      Alert.alert("Erro", "Nao foi possivel capturar a imagem.");
     }
   };
 
   const handleUpload = async (base64: string, fileName: string, mimeType: string) => {
     if (!folders || folders.length === 0) {
-      Alert.alert("Crie uma pasta", "Vá para a Biblioteca e crie uma pasta antes de enviar documentos.");
+      Alert.alert("Crie uma pasta", "Va para a Biblioteca e crie uma pasta antes de enviar documentos.");
       return;
     }
 
-    const defaultFolder = folders[0];
     setIsUploading(true);
-
     try {
       const result = await uploadMutation.mutateAsync({
-        folderId: defaultFolder.id,
+        folderId: folders[0].id,
         title: fileName.replace(/\.[^/.]+$/, ""),
         fileBase64: base64,
         fileName,
         mimeType,
       });
-      router.replace(`/document/${result.id}` as any);
-    } catch (error: any) {
-      if (error.message?.includes("LIMIT_REACHED")) {
-        Alert.alert("Limite atingido", "Você atingiu o limite diário de conversões. Faça upgrade para Pro.", [
+      router.replace(`/document/${result.id}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("LIMIT_REACHED")) {
+        Alert.alert("Limite atingido", "Voce atingiu o limite diario de conversoes.", [
           { text: "Cancelar", style: "cancel" },
-          { text: "Ver Planos", onPress: () => router.push("/paywall" as any) },
+          { text: "Ver Planos", onPress: () => router.push("/paywall") },
         ]);
       } else {
-        Alert.alert("Erro", "Não foi possível enviar o documento.");
+        Alert.alert("Erro", "Nao foi possivel enviar o documento.");
       }
     } finally {
       setIsUploading(false);
@@ -97,7 +91,6 @@ export default function ScannerScreen() {
 
   return (
     <ScreenContainer className="px-5 pt-4" edges={["top", "bottom", "left", "right"]}>
-      {/* Header */}
       <View className="flex-row items-center mb-6 gap-3">
         <Pressable onPress={() => router.back()} style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
           <IconSymbol name="arrow.left" size={24} color={colors.foreground} />
@@ -106,35 +99,50 @@ export default function ScannerScreen() {
       </View>
 
       <View className="flex-1 items-center justify-center gap-6">
-        {/* Camera Option */}
         <Pressable
           onPress={() => pickImage(true)}
-          style={({ pressed }) => [styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+          style={({ pressed }) => [
+            styles.optionCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              opacity: pressed ? 0.8 : 1,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+            },
+          ]}
         >
-          <View style={[styles.optionIcon, { backgroundColor: colors.primary + "20" }]}>
+          <View style={[styles.optionIcon, { backgroundColor: `${colors.primary}20` }]}>
             <IconSymbol name="camera.fill" size={36} color={colors.primary} />
           </View>
           <Text className="text-lg font-semibold text-foreground mt-3">Tirar Foto</Text>
-          <Text className="text-sm text-muted mt-1 text-center">Aponte a câmera para o material de estudo</Text>
+          <Text className="text-sm text-muted mt-1 text-center">
+            Aponte a camera para o material de estudo
+          </Text>
         </Pressable>
 
-        {/* Gallery Option */}
         <Pressable
           onPress={() => pickImage(false)}
-          style={({ pressed }) => [styles.optionCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+          style={({ pressed }) => [
+            styles.optionCard,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              opacity: pressed ? 0.8 : 1,
+              transform: [{ scale: pressed ? 0.97 : 1 }],
+            },
+          ]}
         >
-          <View style={[styles.optionIcon, { backgroundColor: colors.success + "20" }]}>
+          <View style={[styles.optionIcon, { backgroundColor: `${colors.success}20` }]}>
             <IconSymbol name="photo.fill" size={36} color={colors.success} />
           </View>
           <Text className="text-lg font-semibold text-foreground mt-3">Galeria</Text>
           <Text className="text-sm text-muted mt-1 text-center">Selecione uma imagem da sua galeria</Text>
         </Pressable>
 
-        {/* Tips */}
-        <View style={[styles.tipBox, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "30" }]}>
+        <View style={[styles.tipBox, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}30` }]}>
           <IconSymbol name="lightbulb.fill" size={18} color={colors.primary} />
           <Text className="text-sm text-foreground ml-2 flex-1">
-            Para melhores resultados, use boa iluminação e enquadre todo o texto na foto.
+            Para melhores resultados, use boa iluminacao e enquadre todo o texto na foto.
           </Text>
         </View>
       </View>

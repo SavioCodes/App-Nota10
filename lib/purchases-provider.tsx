@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import Purchases from "react-native-purchases";
+import Purchases, { type PurchasesOfferings, type PurchasesPackage } from "react-native-purchases";
 
 import { useAuth } from "@/hooks/use-auth";
 import { getRevenueCatApiKey, isRevenueCatSupportedPlatform } from "@/constants/revenuecat";
@@ -17,7 +17,7 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuth();
   const [isReady, setIsReady] = useState(false);
   const [isConfigured, setIsConfigured] = useState(false);
-  const [offerings, setOfferings] = useState<any | null>(null);
+  const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const isSupported = isRevenueCatSupportedPlatform();
 
   const refreshOfferings = useCallback(async () => {
@@ -92,14 +92,15 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, isConfigured, isSupported, refreshOfferings, user?.openId]);
 
-  const findPackageByProductId = useCallback((productId: string, sourceOfferings: any | null) => {
+  const findPackageByProductId = useCallback((
+    productId: string,
+    sourceOfferings: PurchasesOfferings | null,
+  ): PurchasesPackage | null => {
     if (!sourceOfferings) return null;
 
-    const allOfferings = Object.values(sourceOfferings.all ?? {}) as Array<any>;
+    const allOfferings = Object.values(sourceOfferings.all ?? {});
     for (const offering of allOfferings) {
-      const match = (offering.availablePackages ?? []).find(
-        (pkg: any) => pkg?.product?.identifier === productId,
-      );
+      const match = (offering.availablePackages ?? []).find((pkg) => pkg?.product?.identifier === productId);
       if (match) return match;
     }
 

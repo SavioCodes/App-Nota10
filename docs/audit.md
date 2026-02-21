@@ -3,6 +3,23 @@
 Data: 2026-02-11  
 Escopo: monorepo local (`Expo + React Native + Express + tRPC + Drizzle/MySQL`)
 
+## Atualizacao 2026-02-21 - Plano de confiabilidade Web+Mobile
+
+Implementacoes concluídas neste ciclo:
+- Fase 1 (P0 revisao): semeadura automatica e idempotente de revisao integrada em `artifacts.generate`, payload de `review.today/all` enriquecido com `front/back`, UI de revisao com conteudo real.
+- Fase 2 (consistencia resultados): invalidação explicita de queries apos `artifacts.generate`, feedback de sucesso/erro por modo, polling robusto em documento durante `extracting/generating`.
+- Fase 3 (observabilidade): logger client/server com niveis e redacao de campos sensiveis; reducao de logs verbosos em auth/api/oauth/runtime.
+- Fase 4 (integridade DB): migracao e indices para `review_items` (`unique user+artifact`, indice `user+nextReviewAt`, indice `user+document`), com limpeza de duplicados e sincronizacao por hash.
+- Fase 5 (type safety + debt): reducao de `any` em telas/servicos centrais, limpeza de warnings de lint prioritarios, teste de logout reativado.
+
+Validacoes executadas em 2026-02-21:
+- `corepack pnpm check`: OK (`tsc --noEmit` sem erros).
+- `corepack pnpm lint`: OK (0 erros, 0 warnings de ESLint).
+- `corepack pnpm test`: OK (7 suites, 14 testes, 0 skip).
+
+Pendencias objetivas:
+- Fase 6 (E2E real Web+Mobile + webhook RevenueCat) depende de credenciais/servicos reais no ambiente (`OAuth`, `DB`, `Gemini`, `RevenueCat`).
+
 ## 1) Resumo executivo
 
 - O projeto compila em TypeScript strict e os testes atuais passam.

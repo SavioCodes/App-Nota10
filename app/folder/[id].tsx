@@ -1,10 +1,9 @@
-import { Text, View, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { trpc } from "@/lib/trpc";
-import { StyleSheet } from "react-native";
 
 export default function FolderDetailScreen() {
   const colors = useColors();
@@ -53,7 +52,7 @@ export default function FolderDetailScreen() {
             const status = statusLabel(item.status);
             return (
               <Pressable
-                onPress={() => router.push(`/document/${item.id}` as any)}
+                onPress={() => router.push(`/document/${item.id}`)}
                 style={({ pressed }) => [styles.docCard, { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}
               >
                 <View style={[styles.docIcon, { backgroundColor: colors.primary + "20" }]}>
@@ -87,7 +86,7 @@ export default function FolderDetailScreen() {
 
       {/* FAB - Add Document */}
       <Pressable
-        onPress={() => router.push(`/upload-pdf?folderId=${folderId}` as any)}
+        onPress={() => router.push(`/upload-pdf?folderId=${folderId}`)}
         style={({ pressed }) => [styles.fab, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.95 : 1 }] }]}
       >
         <IconSymbol name="plus" size={28} color={colors.background} />

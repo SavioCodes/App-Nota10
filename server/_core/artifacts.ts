@@ -53,7 +53,7 @@ export type ArtifactBundle = {
 export type DbArtifactInsert = {
   documentId: number;
   type: "summary" | "content_map" | "flashcard" | "question";
-  content: any;
+  content: unknown;
   sourceChunkIds: number[];
   mode: StudyMode;
   sourceHash: string;

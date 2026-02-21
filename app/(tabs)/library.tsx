@@ -1,4 +1,4 @@
-import { Text, View, Pressable, FlatList, TextInput, Alert } from "react-native";
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
@@ -6,7 +6,6 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
-import { StyleSheet } from "react-native";
 
 export default function LibraryScreen() {
   const { isAuthenticated } = useAuth();
@@ -81,7 +80,7 @@ export default function LibraryScreen() {
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => router.push(`/folder/${item.id}` as any)}
+            onPress={() => router.push(`/folder/${item.id}`)}
             onLongPress={() => {
               Alert.alert("Excluir pasta", `Deseja excluir "${item.name}"?`, [
                 { text: "Cancelar", style: "cancel" },

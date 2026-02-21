@@ -7,7 +7,7 @@ import { chunkTextDeterministic, computeTextHash, normalizeExtractedText } from 
 import { getSessionCookieOptions } from "./_core/cookies";
 import { ENV } from "./_core/env";
 import { assertUploadMimeType, assertUploadSize, extractDocumentText } from "./_core/extraction";
-import { invokeLLM, type StudyMode } from "./_core/llm";
+import { invokeLLM } from "./_core/llm";
 import { consumeRateLimit } from "./_core/rate-limit";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -72,8 +72,10 @@ function extractTextContent(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return content
     .map((part) => {
-      if (part && typeof part === "object" && "type" in part && (part as any).type === "text") {
-        return (part as any).text ?? "";
+      if (!part || typeof part !== "object" || !("type" in part)) return "";
+      const maybeTextPart = part as { type?: unknown; text?: unknown };
+      if (maybeTextPart.type === "text" && typeof maybeTextPart.text === "string") {
+        return maybeTextPart.text;
       }
       return "";
     })
@@ -251,6 +253,11 @@ async function generateArtifactsForDocument(args: {
     args.userId,
   );
   if (cached.length > 0) {
+    await db.syncReviewItemsForDocument({
+      userId: args.userId,
+      documentId: args.documentId,
+      sourceHash,
+    });
     return { cached: true, count: cached.length };
   }
 
@@ -278,6 +285,11 @@ async function generateArtifactsForDocument(args: {
   }
 
   await db.createArtifacts(rows);
+  await db.syncReviewItemsForDocument({
+    userId: args.userId,
+    documentId: args.documentId,
+    sourceHash,
+  });
   if (args.consumeUsage) {
     await consumeConversionIfNeeded(args.userId, plan);
   }
@@ -464,7 +476,7 @@ export const appRouter = router({
 
         return generateArtifactsForDocument({
           documentId: input.documentId,
-          mode: input.mode as StudyMode,
+          mode: input.mode,
           userId: ctx.user.id,
           consumeUsage: true,
         });
@@ -521,15 +533,12 @@ export const appRouter = router({
           document?.textHash ?? undefined,
           ctx.user.id,
         );
-        const now = new Date();
-        const items = flashcards.map((artifact) => ({
+        const seeded = await db.syncReviewItemsForDocument({
           userId: ctx.user.id,
-          artifactId: artifact.id,
           documentId: input.documentId,
-          nextReviewAt: now,
-        }));
-        await db.createReviewItems(items);
-        return { count: items.length };
+          sourceHash: document?.textHash,
+        });
+        return { count: seeded.seededCount, availableFlashcards: flashcards.length };
       }),
   }),
 

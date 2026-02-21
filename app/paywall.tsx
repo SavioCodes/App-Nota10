@@ -1,13 +1,14 @@
-﻿import { Text, View, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
-import { ScreenContainer } from "@/components/screen-container";
-import { useColors } from "@/hooks/use-colors";
-import { IconSymbol } from "@/components/ui/icon-symbol";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { StyleSheet } from "react-native";
 import { useState } from "react";
-import { useAuth } from "@/hooks/use-auth";
-import { usePurchases } from "@/lib/purchases-provider";
+
+import type { ThemeColorPalette } from "@/constants/theme";
 import { REVENUECAT_PRODUCT_IDS } from "@/constants/revenuecat";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { ScreenContainer } from "@/components/screen-container";
+import { useAuth } from "@/hooks/use-auth";
+import { useColors } from "@/hooks/use-colors";
+import { usePurchases } from "@/lib/purchases-provider";
 import { trpc } from "@/lib/trpc";
 
 const plans = [
@@ -43,6 +44,15 @@ const plans = [
   },
 ] as const;
 
+type PurchaseError = {
+  userCancelled?: boolean;
+};
+
+function isPurchaseCancellationError(error: unknown): error is PurchaseError {
+  if (!error || typeof error !== "object") return false;
+  return "userCancelled" in error;
+}
+
 export default function PaywallScreen() {
   const colors = useColors();
   const router = useRouter();
@@ -57,12 +67,10 @@ export default function PaywallScreen() {
       Alert.alert("Login necessario", "Faca login para assinar um plano.");
       return;
     }
-
     if (!isSupported) {
       Alert.alert("Indisponivel", "A compra no app esta disponivel apenas no iOS/Android.");
       return;
     }
-
     if (!isReady) {
       Alert.alert("Aguarde", "Inicializando pagamentos. Tente novamente em alguns segundos.");
       return;
@@ -77,8 +85,8 @@ export default function PaywallScreen() {
         "Compra registrada com sucesso. Seu plano sera atualizado automaticamente.",
       );
       router.back();
-    } catch (error: any) {
-      const userCancelled = Boolean(error?.userCancelled);
+    } catch (error: unknown) {
+      const userCancelled = isPurchaseCancellationError(error) && Boolean(error.userCancelled);
       if (!userCancelled) {
         Alert.alert("Erro na compra", "Nao foi possivel concluir a assinatura agora.");
       }
@@ -98,7 +106,7 @@ export default function PaywallScreen() {
       await restorePurchases();
       await utils.usage.today.invalidate();
       Alert.alert("Restaurado", "Compras restauradas com sucesso.");
-    } catch (error) {
+    } catch {
       Alert.alert("Erro", "Nao foi possivel restaurar as compras.");
     } finally {
       setIsRestoring(false);
@@ -116,7 +124,7 @@ export default function PaywallScreen() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <View className="items-center mb-6">
-          <View style={[styles.crownCircle, { backgroundColor: colors.primary + "20" }]}>
+          <View style={[styles.crownCircle, { backgroundColor: `${colors.primary}20` }]}>
             <IconSymbol name="crown.fill" size={40} color={colors.primary} />
           </View>
           <Text className="text-2xl font-bold text-foreground mt-4">Desbloqueie todo o potencial</Text>
@@ -125,7 +133,7 @@ export default function PaywallScreen() {
           </Text>
         </View>
 
-        <View style={[styles.freePlan, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+        <View style={[styles.freePlan, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text className="text-base font-semibold text-foreground mb-2">Plano Gratuito</Text>
           <View className="gap-1.5">
             <FeatureRow text="3 conversoes/dia" included={true} colors={colors} />
@@ -156,8 +164,8 @@ export default function PaywallScreen() {
               <Text className="text-sm text-muted ml-1">{plan.period}</Text>
             </View>
             <View className="mt-4 gap-2">
-              {plan.features.map((feature, i) => (
-                <FeatureRow key={i} text={feature} included={true} colors={colors} />
+              {plan.features.map((feature, index) => (
+                <FeatureRow key={`${plan.id}-${index}`} text={feature} included={true} colors={colors} />
               ))}
             </View>
             <Pressable
@@ -177,7 +185,10 @@ export default function PaywallScreen() {
               {loadingPlanId === plan.id ? (
                 <ActivityIndicator color={plan.recommended ? colors.background : colors.primary} />
               ) : (
-                <Text style={{ color: plan.recommended ? colors.background : colors.primary }} className="font-bold text-base">
+                <Text
+                  style={{ color: plan.recommended ? colors.background : colors.primary }}
+                  className="font-bold text-base"
+                >
                   Assinar {plan.name}
                 </Text>
               )}
@@ -212,7 +223,15 @@ export default function PaywallScreen() {
   );
 }
 
-function FeatureRow({ text, included, colors }: { text: string; included: boolean; colors: any }) {
+function FeatureRow({
+  text,
+  included,
+  colors,
+}: {
+  text: string;
+  included: boolean;
+  colors: ThemeColorPalette;
+}) {
   return (
     <View className="flex-row items-center gap-2">
       <IconSymbol
@@ -220,7 +239,9 @@ function FeatureRow({ text, included, colors }: { text: string; included: boolea
         size={18}
         color={included ? colors.success : colors.muted}
       />
-      <Text style={{ color: included ? colors.foreground : colors.muted }} className="text-sm">{text}</Text>
+      <Text style={{ color: included ? colors.foreground : colors.muted }} className="text-sm">
+        {text}
+      </Text>
     </View>
   );
 }

@@ -36,6 +36,13 @@
       "when": 1771200000000,
       "tag": "0004_revenuecat_webhook_events",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1771719000000,
+      "tag": "0005_review_items_integrity",
+      "breakpoints": true
     }
   ]
 }

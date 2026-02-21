@@ -1,11 +1,10 @@
-import { Text, View, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, Text, View, StyleSheet } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
-import { StyleSheet } from "react-native";
 
 export default function ReviewScreen() {
   const { isAuthenticated } = useAuth();
@@ -58,7 +57,7 @@ export default function ReviewScreen() {
       {/* Start Review Button */}
       {dueCards > 0 && (
         <Pressable
-          onPress={() => router.push("/review-session" as any)}
+          onPress={() => router.push("/review-session")}
           style={({ pressed }) => [styles.startButton, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
         >
           <View className="flex-row items-center gap-2">
@@ -102,7 +101,9 @@ export default function ReviewScreen() {
                   <Text style={{ color: colors.primary }} className="font-bold text-sm">{index + 1}</Text>
                 </View>
                 <View className="flex-1 ml-3">
-                  <Text className="text-sm text-foreground" numberOfLines={1}>Flashcard #{item.artifactId}</Text>
+                  <Text className="text-sm text-foreground" numberOfLines={1}>
+                    {item.front || `Flashcard #${item.artifactId}`}
+                  </Text>
                   <Text className="text-xs text-muted">Intervalo: {item.interval} dia(s)</Text>
                 </View>
               </View>

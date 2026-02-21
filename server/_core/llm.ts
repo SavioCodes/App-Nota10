@@ -270,11 +270,18 @@ async function toGeminiParts(content: MessageContent | MessageContent[]): Promis
   return parts;
 }
 
-function extractTextFromGeminiResponse(payload: any): string {
-  const candidate = payload?.candidates?.[0];
+function extractTextFromGeminiResponse(payload: unknown): string {
+  const envelope = (payload ?? {}) as {
+    candidates?: {
+      finishReason?: string;
+      content?: { parts?: { text?: unknown }[] };
+    }[];
+  };
+
+  const candidate = envelope.candidates?.[0];
   const parts = candidate?.content?.parts ?? [];
   const text = parts
-    .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+    .map((part) => (typeof part?.text === "string" ? part.text : ""))
     .join("")
     .trim();
 

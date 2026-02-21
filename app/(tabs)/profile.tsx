@@ -1,12 +1,12 @@
-import { Text, View, Pressable, ScrollView, Alert } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import type { ThemeColorPalette } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRouter } from "expo-router";
 import { trpc } from "@/lib/trpc";
 import { startOAuthLogin } from "@/constants/oauth";
-import { StyleSheet } from "react-native";
 
 export default function ProfileScreen() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -66,7 +66,7 @@ export default function ProfileScreen() {
         {/* Upgrade Banner */}
         {usage?.plan === "free" && (
           <Pressable
-            onPress={() => router.push("/paywall" as any)}
+            onPress={() => router.push("/paywall")}
             style={({ pressed }) => [styles.upgradeBanner, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}
           >
             <IconSymbol name="crown.fill" size={24} color={colors.background} />
@@ -93,7 +93,7 @@ export default function ProfileScreen() {
           title="Privacidade"
           subtitle="Política de privacidade"
           colors={colors}
-          onPress={() => {}}
+          onPress={() => Alert.alert("Privacidade", "A politica de privacidade estara disponivel em breve.")}
         />
         <SettingsItem
           icon="trash.fill"
@@ -126,8 +126,20 @@ export default function ProfileScreen() {
   );
 }
 
-function SettingsItem({ icon, title, subtitle, colors, danger, onPress }: {
-  icon: any; title: string; subtitle: string; colors: any; danger?: boolean; onPress: () => void;
+function SettingsItem({
+  icon,
+  title,
+  subtitle,
+  colors,
+  danger,
+  onPress,
+}: {
+  icon: Parameters<typeof IconSymbol>[0]["name"];
+  title: string;
+  subtitle: string;
+  colors: ThemeColorPalette;
+  danger?: boolean;
+  onPress: () => void;
 }) {
   return (
     <Pressable

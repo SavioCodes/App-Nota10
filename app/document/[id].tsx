@@ -1,10 +1,9 @@
-import { Text, View, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { trpc } from "@/lib/trpc";
-import { StyleSheet } from "react-native";
 
 export default function DocumentDetailScreen() {
   const colors = useColors();
@@ -12,7 +11,19 @@ export default function DocumentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const docId = parseInt(id || "0", 10);
 
-  const { data: doc, isLoading } = trpc.documents.get.useQuery({ id: docId });
+  const { data: doc, isLoading } = trpc.documents.get.useQuery(
+    { id: docId },
+    {
+      enabled: docId > 0,
+      refetchInterval: (query) => {
+        const status = query.state.data?.status;
+        if (status === "extracting" || status === "generating") {
+          return 3_000;
+        }
+        return false;
+      },
+    },
+  );
 
   if (isLoading) {
     return (
@@ -91,7 +102,7 @@ export default function DocumentDetailScreen() {
         {doc.status === "ready" && (
           <View className="gap-3">
             <Pressable
-              onPress={() => router.push(`/results/${doc.id}` as any)}
+              onPress={() => router.push(`/results/${doc.id}`)}
               style={({ pressed }) => [styles.actionButton, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
             >
               <IconSymbol name="lightbulb.fill" size={22} color={colors.background} />
@@ -99,7 +110,7 @@ export default function DocumentDetailScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/results/${doc.id}?tab=flashcards` as any)}
+              onPress={() => router.push(`/results/${doc.id}?tab=flashcards`)}
               style={({ pressed }) => [styles.actionButton, { backgroundColor: colors.success, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
             >
               <IconSymbol name="bolt.fill" size={22} color={colors.background} />
@@ -107,7 +118,7 @@ export default function DocumentDetailScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/results/${doc.id}?tab=questions` as any)}
+              onPress={() => router.push(`/results/${doc.id}?tab=questions`)}
               style={({ pressed }) => [styles.actionButton, { backgroundColor: "#FF6B6B", opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
             >
               <IconSymbol name="questionmark.circle.fill" size={22} color={colors.background} />
@@ -115,7 +126,7 @@ export default function DocumentDetailScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/export-pdf?documentId=${doc.id}` as any)}
+              onPress={() => router.push(`/export-pdf?documentId=${doc.id}`)}
               style={({ pressed }) => [styles.actionButton, { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.9 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
             >
               <IconSymbol name="doc.fill" size={22} color={colors.foreground} />

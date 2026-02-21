@@ -5,10 +5,6 @@
  */
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const envPath = path.resolve(process.cwd(), ".env");
 
@@ -38,6 +34,7 @@ const mappings = {
   VITE_APP_ID: "EXPO_PUBLIC_APP_ID",
   VITE_OAUTH_PORTAL_URL: "EXPO_PUBLIC_OAUTH_PORTAL_URL",
   OAUTH_SERVER_URL: "EXPO_PUBLIC_OAUTH_SERVER_URL",
+  APP_SCHEME: "EXPO_PUBLIC_DEEP_LINK_SCHEME",
   OWNER_OPEN_ID: "EXPO_PUBLIC_OWNER_OPEN_ID",
   OWNER_NAME: "EXPO_PUBLIC_OWNER_NAME",
   REVENUECAT_IOS_API_KEY: "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY",

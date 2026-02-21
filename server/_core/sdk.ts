@@ -14,9 +14,12 @@ import type {
   GetUserInfoWithJwtRequest,
   GetUserInfoWithJwtResponse,
 } from "./types/manusTypes";
+import { serverLogger } from "./logger";
 // Utility function
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
+const toRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
 export type SessionPayload = {
   openId: string;
@@ -30,11 +33,9 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    serverLogger.debug("oauth.sdk_initialized", { baseUrlConfigured: Boolean(ENV.oAuthServerUrl) });
     if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable.",
-      );
+      serverLogger.error("oauth.server_url_missing");
     }
   }
 
@@ -115,12 +116,17 @@ class SDKServer {
     const data = await this.oauthService.getUserInfoByToken({
       accessToken,
     } as ExchangeTokenResponse);
+    const dataRecord = toRecord(data);
+    const platformFallback =
+      typeof dataRecord.platform === "string" && dataRecord.platform.length > 0
+        ? dataRecord.platform
+        : (data.platform ?? null);
     const loginMethod = this.deriveLoginMethod(
-      (data as any)?.platforms,
-      (data as any)?.platform ?? data.platform ?? null,
+      dataRecord.platforms,
+      platformFallback,
     );
     return {
-      ...(data as any),
+      ...data,
       platform: loginMethod,
       loginMethod,
     } as GetUserInfoResponse;
@@ -182,7 +188,7 @@ class SDKServer {
     cookieValue: string | undefined | null,
   ): Promise<{ openId: string; appId: string; name: string } | null> {
     if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
+      serverLogger.warn("auth.session_cookie_missing");
       return null;
     }
 
@@ -194,7 +200,7 @@ class SDKServer {
       const { openId, appId, name } = payload as Record<string, unknown>;
 
       if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) {
-        console.warn("[Auth] Session payload missing required fields");
+        serverLogger.warn("auth.session_payload_invalid");
         return null;
       }
 
@@ -204,7 +210,9 @@ class SDKServer {
         name,
       };
     } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+      serverLogger.warn("auth.session_verification_failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
@@ -219,13 +227,18 @@ class SDKServer {
       GET_USER_INFO_WITH_JWT_PATH,
       payload,
     );
+    const dataRecord = toRecord(data);
+    const platformFallback =
+      typeof dataRecord.platform === "string" && dataRecord.platform.length > 0
+        ? dataRecord.platform
+        : (data.platform ?? null);
 
     const loginMethod = this.deriveLoginMethod(
-      (data as any)?.platforms,
-      (data as any)?.platform ?? data.platform ?? null,
+      dataRecord.platforms,
+      platformFallback,
     );
     return {
-      ...(data as any),
+      ...data,
       platform: loginMethod,
       loginMethod,
     } as GetUserInfoWithJwtResponse;
@@ -264,7 +277,9 @@ class SDKServer {
         });
         user = await db.getUserByOpenId(userInfo.openId);
       } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
+        serverLogger.error("auth.oauth_sync_failed", {
+          message: error instanceof Error ? error.message : "unknown_error",
+        });
         throw ForbiddenError("Failed to sync user info");
       }
     }
