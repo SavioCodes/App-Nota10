@@ -1,9 +1,10 @@
-import { Dimensions, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Dimensions, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { useState, useRef } from "react";
 import { startOAuthLogin } from "@/constants/oauth";
+import { appLogger } from "@/lib/_core/logger";
 
 const { width } = Dimensions.get("window");
 
@@ -33,12 +34,23 @@ export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
+  const handleLogin = async () => {
+    const loginUrl = await startOAuthLogin();
+    if (loginUrl) return;
+
+    appLogger.warn("auth.login_not_started_from_onboarding");
+    Alert.alert(
+      "Nao foi possivel entrar",
+      "Confira as configuracoes de autenticacao (Supabase/OAuth) e tente novamente.",
+    );
+  };
+
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
       setCurrentIndex(currentIndex + 1);
     } else {
-      startOAuthLogin();
+      void handleLogin();
     }
   };
 
@@ -94,7 +106,9 @@ export default function OnboardingScreen() {
           </Pressable>
           {currentIndex < slides.length - 1 && (
             <Pressable
-              onPress={() => startOAuthLogin()}
+              onPress={() => {
+                void handleLogin();
+              }}
               style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, alignItems: "center", paddingVertical: 8 }]}
             >
               <Text className="text-muted text-base">Pular</Text>

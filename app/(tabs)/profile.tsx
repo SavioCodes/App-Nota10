@@ -29,6 +29,16 @@ export default function ProfileScreen() {
   const { data: usage } = trpc.usage.today.useQuery(undefined, { enabled: isAuthenticated });
   const deleteAccountMutation = trpc.auth.deleteAccount.useMutation();
 
+  const handleLogin = async () => {
+    const loginUrl = await startOAuthLogin();
+    if (loginUrl) return;
+
+    Alert.alert(
+      "Nao foi possivel entrar",
+      "Confira as configuracoes de autenticacao (Supabase/OAuth) e tente novamente.",
+    );
+  };
+
   const openPrivacyPolicy = async () => {
     const url = getPrivacyPolicyUrl();
 
@@ -90,7 +100,7 @@ export default function ProfileScreen() {
           </Text>
           <Pressable
             onPress={() => {
-              void startOAuthLogin();
+              void handleLogin();
             }}
             style={({ pressed }) => [
               styles.loginButton,

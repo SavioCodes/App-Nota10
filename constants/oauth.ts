@@ -1,6 +1,9 @@
 import * as Linking from "expo-linking";
+import Constants from "expo-constants";
+import * as WebBrowser from "expo-web-browser";
 import * as ReactNative from "react-native";
 
+import { appLogger } from "@/lib/_core/logger";
 import { getSupabaseClient, isSupabaseAuthEnabled } from "@/lib/supabase/client";
 
 const env = {
@@ -10,7 +13,11 @@ const env = {
   ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
-  deepLinkScheme: process.env.EXPO_PUBLIC_DEEP_LINK_SCHEME ?? "",
+  deepLinkScheme:
+    process.env.EXPO_PUBLIC_DEEP_LINK_SCHEME ??
+    (typeof Constants.expoConfig?.extra?.deepLinkScheme === "string"
+      ? Constants.expoConfig.extra.deepLinkScheme
+      : "nota10"),
 };
 
 export const OAUTH_PORTAL_URL = env.portal;
@@ -38,6 +45,8 @@ export function getApiBaseUrl(): string {
 
 export const SESSION_TOKEN_KEY = "app_session_token";
 export const USER_INFO_KEY = "manus-runtime-user-info";
+
+void WebBrowser.maybeCompleteAuthSession();
 
 const encodeState = (value: string) => {
   if (typeof globalThis.btoa === "function") {
@@ -72,11 +81,64 @@ export const getRedirectUri = () => {
   return Linking.createURL("/oauth/callback");
 };
 
-export const getLoginUrl = () => {
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+async function openOAuthSession(loginUrl: string): Promise<string | null> {
+  if (ReactNative.Platform.OS === "web") {
+    if (typeof window !== "undefined") {
+      window.location.href = loginUrl;
+    }
+    return loginUrl;
+  }
+
+  try {
+    const result = await WebBrowser.openAuthSessionAsync(loginUrl, getRedirectUri());
+    if (result.type !== "success") {
+      return null;
+    }
+    if (result.type === "success" && result.url) {
+      await Linking.openURL(result.url);
+    }
+    return loginUrl;
+  } catch (error) {
+    appLogger.warn("auth.oauth_session_failed", {
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+    const supported = await Linking.canOpenURL(loginUrl);
+    if (!supported) {
+      return null;
+    }
+    try {
+      await Linking.openURL(loginUrl);
+      return loginUrl;
+    } catch {
+      return null;
+    }
+  }
+}
+
+export const getLoginUrl = (): string | null => {
+  if (!OAUTH_PORTAL_URL) {
+    return null;
+  }
+
+  let portal: URL;
+  try {
+    portal = new URL(OAUTH_PORTAL_URL);
+  } catch {
+    return null;
+  }
+
   const redirectUri = getRedirectUri();
   const state = encodeState(redirectUri);
-
-  const url = new URL(`${OAUTH_PORTAL_URL}/app-auth`);
+  const url = new URL("/app-auth", portal);
   url.searchParams.set("appId", APP_ID);
   url.searchParams.set("redirectUri", redirectUri);
   url.searchParams.set("state", state);
@@ -106,26 +168,11 @@ async function startSupabaseOAuthLogin(): Promise<string | null> {
   if (!loginUrl) {
     return null;
   }
-
-  if (ReactNative.Platform.OS === "web") {
-    if (typeof window !== "undefined") {
-      window.location.href = loginUrl;
-    }
-    return loginUrl;
-  }
-
-  const supported = await Linking.canOpenURL(loginUrl);
-  if (!supported) {
+  if (!isHttpUrl(loginUrl)) {
+    appLogger.warn("auth.supabase_oauth_invalid_url");
     return null;
   }
-
-  try {
-    await Linking.openURL(loginUrl);
-  } catch {
-    return null;
-  }
-
-  return loginUrl;
+  return openOAuthSession(loginUrl);
 }
 
 export async function startOAuthLogin(): Promise<string | null> {
@@ -134,23 +181,9 @@ export async function startOAuthLogin(): Promise<string | null> {
   }
 
   const loginUrl = getLoginUrl();
-  if (ReactNative.Platform.OS === "web") {
-    if (typeof window !== "undefined") {
-      window.location.href = loginUrl;
-    }
+  if (!loginUrl || !isHttpUrl(loginUrl)) {
+    appLogger.warn("auth.legacy_oauth_url_unavailable");
     return null;
   }
-
-  const supported = await Linking.canOpenURL(loginUrl);
-  if (!supported) {
-    return null;
-  }
-
-  try {
-    await Linking.openURL(loginUrl);
-  } catch {
-    return null;
-  }
-
-  return null;
+  return openOAuthSession(loginUrl);
 }

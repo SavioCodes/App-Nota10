@@ -14,8 +14,11 @@ function hasPurchasesConfigPlugin(): boolean {
   }
 }
 
+const DEFAULT_BUNDLE_ID = "com.saviocodes.nota10";
+const DEFAULT_APP_SCHEME = "nota10";
+
 // Bundle ID can be configured by APP_BUNDLE_ID.
-const rawBundleId = process.env.APP_BUNDLE_ID ?? "space.manus.nota10.t20260210152816";
+const rawBundleId = process.env.APP_BUNDLE_ID ?? DEFAULT_BUNDLE_ID;
 const bundleId =
   rawBundleId
     .replace(/[-_]/g, ".") // Replace hyphens/underscores with dots
@@ -30,13 +33,10 @@ const bundleId =
       return /^[a-zA-Z]/.test(segment) ? segment : "x" + segment;
     })
     .join(".") || "space.manus.app";
-const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
-const schemeFromBundleId = `manus${timestamp}`;
-
 const env = {
   appName: "Nota10",
   appSlug: "nota10",
-  scheme: process.env.APP_SCHEME ?? schemeFromBundleId,
+  scheme: process.env.APP_SCHEME ?? DEFAULT_APP_SCHEME,
   iosBundleId: bundleId,
   androidPackage: bundleId,
 };
@@ -94,6 +94,9 @@ const config: ExpoConfig = {
   },
   extra: {
     deepLinkScheme: env.scheme,
+    eas: {
+      projectId: "6b4735c1-b62f-4234-9cd5-7de5567cfebf",
+    },
   },
   plugins: [
     "expo-router",
