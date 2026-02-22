@@ -1,17 +1,21 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import type { ThemeColorPalette } from "@/constants/theme";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
+import { isOnboardingCompleted } from "@/lib/_core/onboarding";
 import { trpc } from "@/lib/trpc";
 
 export default function HomeScreen() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const colors = useColors();
   const router = useRouter();
+  const [checkingFirstRun, setCheckingFirstRun] = useState(true);
+  const hasRedirected = useRef(false);
 
   const { data: recentDocs } = trpc.documents.recent.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -23,30 +27,91 @@ export default function HomeScreen() {
     enabled: isAuthenticated,
   });
 
+  useEffect(() => {
+    let active = true;
+
+    if (loading || isAuthenticated) {
+      if (!loading && active) {
+        setCheckingFirstRun(false);
+      }
+      return () => {
+        active = false;
+      };
+    }
+
+    void (async () => {
+      const completed = await isOnboardingCompleted();
+      if (!completed && !hasRedirected.current) {
+        hasRedirected.current = true;
+        router.replace("/onboarding");
+        return;
+      }
+
+      if (active) {
+        setCheckingFirstRun(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, loading, router]);
+
+  if (loading || checkingFirstRun) {
+    return (
+      <ScreenContainer className="p-6">
+        <View className="flex-1 items-center justify-center gap-4">
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text className="text-base text-muted">Preparando sua experiencia...</Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <ScreenContainer className="p-6">
-        <View className="flex-1 items-center justify-center gap-6">
-          <View className="w-20 h-20 rounded-2xl bg-primary items-center justify-center">
-            <Text className="text-4xl font-bold text-background">N</Text>
+        <View className="flex-1 items-center justify-center gap-5">
+          <View style={[styles.heroBadge, { backgroundColor: colors.primary }]}>
+            <Text className="text-4xl font-bold" style={{ color: colors.background }}>
+              N
+            </Text>
           </View>
           <Text className="text-3xl font-bold text-foreground">Nota10</Text>
           <Text className="text-base text-muted text-center px-8">
-            Transforme seus materiais de estudo em resumos, flashcards e questoes de prova com IA.
+            Organize seus estudos com resumos, flashcards e revisao inteligente.
           </Text>
-          <Pressable
-            onPress={() => router.push("/onboarding")}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              {
-                backgroundColor: colors.primary,
-                opacity: pressed ? 0.9 : 1,
-                transform: [{ scale: pressed ? 0.97 : 1 }],
-              },
-            ]}
-          >
-            <Text className="text-background font-semibold text-lg">Comecar</Text>
-          </Pressable>
+          <View style={styles.authActions}>
+            <Pressable
+              onPress={() => router.push("/auth?mode=signup")}
+              style={({ pressed }) => [
+                styles.primaryButton,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.9 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }],
+                },
+              ]}
+            >
+              <Text className="text-background font-semibold text-lg">Criar conta</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push("/auth?mode=login")}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text className="font-semibold text-lg" style={{ color: colors.foreground }}>
+                Entrar
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScreenContainer>
     );
@@ -222,11 +287,30 @@ function ActionCard({
 }
 
 const styles = StyleSheet.create({
+  heroBadge: {
+    width: 84,
+    height: 84,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  authActions: {
+    width: "100%",
+    gap: 10,
+    marginTop: 4,
+  },
   primaryButton: {
-    paddingHorizontal: 32,
+    width: "100%",
     paddingVertical: 14,
-    borderRadius: 50,
-    marginTop: 8,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  secondaryButton: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
   },
   progressBar: {
     height: "100%",

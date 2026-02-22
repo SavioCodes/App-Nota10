@@ -4,7 +4,6 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import { ScreenContainer } from "@/components/screen-container";
-import { startOAuthLogin } from "@/constants/oauth";
 import type { ThemeColorPalette } from "@/constants/theme";
 import { useAuth } from "@/hooks/use-auth";
 import { useColors } from "@/hooks/use-colors";
@@ -28,16 +27,6 @@ export default function ProfileScreen() {
 
   const { data: usage } = trpc.usage.today.useQuery(undefined, { enabled: isAuthenticated });
   const deleteAccountMutation = trpc.auth.deleteAccount.useMutation();
-
-  const handleLogin = async () => {
-    const loginUrl = await startOAuthLogin();
-    if (loginUrl) return;
-
-    Alert.alert(
-      "Nao foi possivel entrar",
-      "Confira as configuracoes de autenticacao (Supabase/OAuth) e tente novamente.",
-    );
-  };
 
   const openPrivacyPolicy = async () => {
     const url = getPrivacyPolicyUrl();
@@ -98,17 +87,32 @@ export default function ProfileScreen() {
           <Text className="text-base text-muted text-center px-8">
             Entre com sua conta para sincronizar seus materiais e acessar todos os recursos.
           </Text>
-          <Pressable
-            onPress={() => {
-              void handleLogin();
-            }}
-            style={({ pressed }) => [
-              styles.loginButton,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
-            ]}
-          >
-            <Text className="text-background font-semibold text-base">Entrar</Text>
-          </Pressable>
+          <View style={styles.authActions}>
+            <Pressable
+              onPress={() => router.push("/auth?mode=login")}
+              style={({ pressed }) => [
+                styles.loginButton,
+                { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 },
+              ]}
+            >
+              <Text className="text-background font-semibold text-base">Entrar</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/auth?mode=signup")}
+              style={({ pressed }) => [
+                styles.registerButton,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.foreground }} className="font-semibold text-base">
+                Criar conta
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </ScreenContainer>
     );
@@ -261,10 +265,22 @@ function SettingsItem({
 }
 
 const styles = StyleSheet.create({
+  authActions: {
+    width: "100%",
+    gap: 10,
+  },
   loginButton: {
-    paddingHorizontal: 32,
+    width: "100%",
     paddingVertical: 14,
-    borderRadius: 50,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  registerButton: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
   },
   userCard: {
     flexDirection: "row",
